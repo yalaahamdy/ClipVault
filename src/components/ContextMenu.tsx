@@ -8,7 +8,8 @@ export interface MenuAction {
   action:
     | "copy" | "pin" | "favorite" | "sensitive" | "edit" | "delete"
     | "open" | "reveal" | "save" | "preview" | "panel"
-    | "toggle-tag" | "toggle-collection";
+    | "toggle-tag" | "toggle-collection"
+    | "ocr" | "copy-ocr";
   tagId?: number;
   collectionId?: number;
 }
@@ -131,7 +132,21 @@ export function ContextMenu({ x, y, item, tags, collections, onAction, onClose }
         <CtxRow icon="edit" label="تعديل النص" onClick={() => onAction({ action: "edit" }, item)} />
       )}
       {item.kind === "image" && (
-        <CtxRow icon="download" label="حفظ الصورة…" onClick={() => onAction({ action: "save" }, item)} />
+        <>
+          <CtxRow
+            icon="scan"
+            label={item.ocrText ? "إعادة استخراج النص (OneOCR)" : "استخراج النص من الصورة (OneOCR)"}
+            onClick={() => onAction({ action: "ocr" }, item)}
+          />
+          {item.ocrText && (
+            <CtxRow
+              icon="copy"
+              label="نسخ النص المستخرج (OCR)"
+              onClick={() => onAction({ action: "copy-ocr" }, item)}
+            />
+          )}
+          <CtxRow icon="download" label="حفظ الصورة…" onClick={() => onAction({ action: "save" }, item)} />
+        </>
       )}
       {item.kind === "link" && (
         <CtxRow icon="external" label="فتح الرابط" onClick={() => onAction({ action: "open" }, item)} />

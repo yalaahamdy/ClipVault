@@ -14,6 +14,7 @@ export interface Item {
   files: string[] | null;
   image: boolean;
   sourceApp: string | null;
+  ocrText?: string | null;
   pinned: boolean;
   favorite: boolean;
   sensitive: boolean;
@@ -154,4 +155,15 @@ export interface PasswordGeneratorOptions {
   symbols: boolean;
   avoidAmbiguous: boolean;
 }
+
+export interface OcrLine {
+  index: number;
+  text: string;
+}
+
+export interface OcrResult {
+  text: string;
+  lines: OcrLine[];
+}
+
 

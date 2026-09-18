@@ -22,6 +22,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<(Item, String)> {
             files,
             image: row.get::<_, i64>("image")? != 0,
             source_app: row.get("source_app")?,
+            ocr_text: row.get("ocr_text").unwrap_or(None),
             pinned: row.get::<_, i64>("pinned")? != 0,
             favorite: row.get::<_, i64>("favorite")? != 0,
             sensitive: row.get::<_, i64>("sensitive")? != 0,
@@ -58,6 +59,7 @@ impl Db {
                 files         TEXT,
                 image         INTEGER NOT NULL DEFAULT 0,
                 source_app    TEXT,
+                ocr_text      TEXT,
                 hash          TEXT NOT NULL,
                 pinned        INTEGER NOT NULL DEFAULT 0,
                 favorite      INTEGER NOT NULL DEFAULT 0,
@@ -122,7 +124,12 @@ impl Db {
             CREATE INDEX IF NOT EXISTS idx_vault_fav ON vault_items(favorite);
             "#,
         )
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+        // Ensure ocr_text column exists for existing databases
+        let _ = conn.execute("ALTER TABLE items ADD COLUMN ocr_text TEXT;", []);
+
+        Ok(())
     }
 
     // ---------- settings ----------
@@ -242,8 +249,9 @@ impl Db {
                     .replace('_', "\\_");
                 let pat = format!("%{}%", escaped.to_lowercase());
                 where_sql.push_str(
-                    " AND (LOWER(COALESCE(text, '')) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(source_app, '')) LIKE ? ESCAPE '\\')",
+                    " AND (LOWER(COALESCE(text, '')) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(source_app, '')) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(ocr_text, '')) LIKE ? ESCAPE '\\')",
                 );
+                vals.push(Value::Text(pat.clone()));
                 vals.push(Value::Text(pat.clone()));
                 vals.push(Value::Text(pat));
             }
@@ -277,7 +285,7 @@ impl Db {
         {
             let sql = format!(
                 "SELECT id, kind, text, html, files, image, source_app, pinned, favorite,
-                        sensitive, created_at, last_used_at, use_count
+                        sensitive, created_at, last_used_at, use_count, ocr_text
                  FROM items WHERE {}
                  ORDER BY {}
                  LIMIT {} OFFSET {}",
@@ -326,7 +334,7 @@ impl Db {
 
     pub fn get_item(&self, id: i64) -> Result<Option<Item>, String> {
         let sql = "SELECT id, kind, text, html, files, image, source_app, pinned, favorite,
-                          sensitive, created_at, last_used_at, use_count
+                          sensitive, created_at, last_used_at, use_count, ocr_text
                    FROM items WHERE id = ?1";
         let mut stmt = self.conn.prepare(sql).map_err(|e| e.to_string())?;
         let mut rows = stmt
@@ -340,6 +348,16 @@ impl Db {
             }
             None => Ok(None),
         }
+    }
+
+    pub fn update_item_ocr_text(&self, id: i64, ocr_text: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE items SET ocr_text = ?1 WHERE id = ?2",
+                params![ocr_text, id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     fn attach_tags(&self, items: &mut [Item]) -> Result<(), String> {

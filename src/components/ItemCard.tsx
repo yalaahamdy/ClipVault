@@ -17,7 +17,7 @@ const thumbCache = new Map<number, string>();
 
 export interface CardActionEvt {
   item: Item;
-  action: "paste" | "copy" | "pin" | "favorite" | "sensitive" | "edit" | "menu" | "preview" | "save" | "open" | "reveal" | "tags";
+  action: "paste" | "copy" | "pin" | "favorite" | "sensitive" | "edit" | "menu" | "preview" | "save" | "open" | "reveal" | "tags" | "ocr" | "copy-ocr";
   x?: number;
   y?: number;
 }
@@ -107,13 +107,21 @@ export function ItemCard({
         }}
       >
         {item.kind === "image" ? (
-          thumb ? (
-            <img className="card-thumb" src={thumb} alt="صورة منسوخة" draggable={false} />
-          ) : thumbFailed ? (
-            <div className="kind-ico"><Icon name="image" size={15} /></div>
-          ) : (
-            <div className="skel-block" style={{ width: 96, height: 60 }} />
-          )
+          <div className="card-image-wrap">
+            {thumb ? (
+              <img className="card-thumb" src={thumb} alt="صورة منسوخة" draggable={false} />
+            ) : thumbFailed ? (
+              <div className="kind-ico"><Icon name="image" size={15} /></div>
+            ) : (
+              <div className="skel-block" style={{ width: 96, height: 60 }} />
+            )}
+            {item.ocrText && (
+              <div className="card-ocr-preview" title={`النص المستخرج: ${item.ocrText}`}>
+                <span className="ocr-mini-badge"><Icon name="scan" size={10} /> OCR</span>
+                <span className="ocr-preview-snippet">{highlight(item.ocrText.slice(0, 120), query)}</span>
+              </div>
+            )}
+          </div>
         ) : item.kind === "link" ? (
           <div className="link-row">
             <div className="link-avatar" style={{ background: colorFor(domain) }}>
@@ -185,6 +193,12 @@ export function ItemCard({
               <Icon name="shield" size={10} />
             </span>
           )}
+          {item.ocrText && (
+            <span className="meta-badge ocr-badge" title="تم استخراج النص بالتعرف الضوئي (OneOCR)">
+              <Icon name="scan" size={10} />
+              <span>OCR</span>
+            </span>
+          )}
           {item.tags.length > 0 && (
             <div className="meta-tags">
               {item.tags.slice(0, 2).map((t) => (
@@ -226,6 +240,15 @@ export function ItemCard({
           {item.kind === "text" && (
             <button className="icon-btn" title="تعديل النص" onClick={() => onAction({ item, action: "edit" })}>
               <Icon name="edit" size={13} />
+            </button>
+          )}
+          {item.kind === "image" && (
+            <button
+              className={`icon-btn ocr-btn${item.ocrText ? " has-ocr" : ""}`}
+              title={item.ocrText ? "نسخ النص المستخرج (OCR)" : "استخراج النص من الصورة (OneOCR)"}
+              onClick={() => onAction({ item, action: item.ocrText ? "copy-ocr" : "ocr" })}
+            >
+              <Icon name="scan" size={13} />
             </button>
           )}
           {item.kind === "image" && (

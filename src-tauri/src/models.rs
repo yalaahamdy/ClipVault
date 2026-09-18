@@ -12,6 +12,7 @@ pub struct Item {
     pub files: Option<Vec<String>>,
     pub image: bool,
     pub source_app: Option<String>,
+    pub ocr_text: Option<String>,
     pub pinned: bool,
     pub favorite: bool,
     pub sensitive: bool,

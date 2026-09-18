@@ -13,4 +13,10 @@ Thumbs.db
 !.vscode/extensions.json
 *.csv
 *.exe
+!OneOcrProfessional/*.exe
+OneOcrProfessional/*.zip
+OneOcrProfessional/*_log.txt
+OneOcrProfessional/*test*.json
+OneOcrProfessional/*.metadata.json
+OneOcrProfessional/**/*.metadata.json
 

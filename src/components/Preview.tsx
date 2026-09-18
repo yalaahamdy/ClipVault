@@ -55,6 +55,31 @@ export function Preview({ item, onClose }: Props) {
   const [bgPattern, setBgPattern] = useState<"grid" | "dark" | "light">("grid");
   const [imgMeta, setImgMeta] = useState<{ width: number; height: number; ratio: string } | null>(null);
 
+  // --- OCR State for images ---
+  const [imageTab, setImageTab] = useState<"image" | "ocr">("image");
+  const [ocrText, setOcrText] = useState<string>(item.ocrText || "");
+  const [ocrLines, setOcrLines] = useState<string[]>(() =>
+    item.ocrText ? item.ocrText.split("\n").filter(Boolean) : []
+  );
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrCopied, setOcrCopied] = useState(false);
+
+  const handleExtractOcr = async (force = false) => {
+    setIsOcrLoading(true);
+    setOcrError(null);
+    try {
+      const res = await api.extractOcr(item.id, force);
+      setOcrText(res.text);
+      setOcrLines(res.lines.map((l: { text: string }) => l.text));
+      setImageTab("ocr");
+    } catch (e) {
+      setOcrError(String(e));
+    } finally {
+      setIsOcrLoading(false);
+    }
+  };
+
   // Pan / Dragging image
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -204,8 +229,12 @@ export function Preview({ item, onClose }: Props) {
                   : `معاينة كود (${lang.toUpperCase()})`}
               </h3>
               <span className="preview-stats-hint">
-                {activeType === "image" && imgMeta
-                  ? `${imgMeta.width} × ${imgMeta.height} px (${imgMeta.ratio}) • تكبير ${Math.round(zoom * 100)}%`
+                {activeType === "image"
+                  ? imageTab === "ocr"
+                    ? `${ocrLines.length} سطر • ${ocrText.trim().split(/\s+/).filter(Boolean).length} كلمة • ${ocrText.length} حرف`
+                    : imgMeta
+                    ? `${imgMeta.width} × ${imgMeta.height} px (${imgMeta.ratio}) • تكبير ${Math.round(zoom * 100)}%`
+                    : "صورة"
                   : `${stats.lines} سطر • ${stats.words} كلمة • ${stats.kb} KB`}
               </span>
             </div>
@@ -303,6 +332,57 @@ export function Preview({ item, onClose }: Props) {
             )}
 
             {activeType === "image" && (
+              <div className="segmented">
+                <button
+                  className={imageTab === "image" ? "on" : ""}
+                  onClick={() => setImageTab("image")}
+                  title="معاينة الصورة بالحجم الكامل"
+                >
+                  <Icon name="image" size={13} /> الصورة
+                </button>
+                <button
+                  className={imageTab === "ocr" ? "on" : ""}
+                  onClick={() => {
+                    setImageTab("ocr");
+                    if (!ocrText && !isOcrLoading) {
+                      handleExtractOcr(false);
+                    }
+                  }}
+                  title="استخراج النص من الصورة بواسطة محرك OneOCR الاحترافي"
+                >
+                  <Icon name="scan" size={13} /> النص المستخرج (OCR)
+                </button>
+              </div>
+            )}
+
+            {activeType === "image" && imageTab === "ocr" && (
+              <>
+                <button
+                  className="top-control-btn"
+                  onClick={() => handleExtractOcr(true)}
+                  disabled={isOcrLoading}
+                  title="إعادة فحص الصورة واستخراج النصوص مجدداً"
+                >
+                  <Icon name="refresh" size={13} /> إعادة الفحص
+                </button>
+                <button
+                  className="top-control-btn"
+                  onClick={() => {
+                    if (ocrText) {
+                      navigator.clipboard.writeText(ocrText);
+                      setOcrCopied(true);
+                      setTimeout(() => setOcrCopied(false), 2000);
+                    }
+                  }}
+                  disabled={!ocrText || isOcrLoading}
+                  title="نسخ النص المستخرج بالكامل"
+                >
+                  <Icon name={ocrCopied ? "check" : "copy"} size={13} /> {ocrCopied ? "تم النسخ" : "نسخ النص"}
+                </button>
+              </>
+            )}
+
+            {activeType === "image" && imageTab === "image" && (
               <div className="preview-img-toolbar">
                 <button className="icon-btn" onClick={zoomOut} title="تصغير (-)">
                   <Icon name="zoomOut" size={15} />
@@ -337,7 +417,7 @@ export function Preview({ item, onClose }: Props) {
         {/* Modal Main Viewport */}
         <div className="preview-viewport" onWheel={handleWheel}>
           {/* IMAGE VIEW */}
-          {activeType === "image" && (
+          {activeType === "image" && imageTab === "image" && (
             <div
               className={`preview-img-container bg-${bgPattern}`}
               onMouseDown={handleMouseDown}
@@ -363,6 +443,65 @@ export function Preview({ item, onClose }: Props) {
                 />
               ) : (
                 <div className="skel-block preview-skel" />
+              )}
+            </div>
+          )}
+
+          {/* OCR VIEW FOR IMAGES */}
+          {activeType === "image" && imageTab === "ocr" && (
+            <div className="preview-ocr-container">
+              {isOcrLoading ? (
+                <div className="preview-ocr-loading">
+                  <div className="ocr-scanner-box">
+                    <div className="ocr-scanner-laser" />
+                    <Icon name="scan" size={48} className="ocr-scanner-icon" />
+                  </div>
+                  <h4>جارٍ فحص الصورة واستخراج النصوص...</h4>
+                  <p>يتم تحليل البكسلات محلياً عبر محرك OneOCR فائق السرعة والدقة</p>
+                </div>
+              ) : ocrError ? (
+                <div className="preview-error-box">
+                  <Icon name="shield" size={36} />
+                  <p>حدث خطأ أثناء استخراج النص: {ocrError}</p>
+                  <button className="btn" onClick={() => handleExtractOcr(true)} style={{ marginTop: 12 }}>
+                    إعادة المحاولة
+                  </button>
+                </div>
+              ) : !ocrText.trim() ? (
+                <div className="preview-ocr-empty">
+                  <Icon name="scan" size={40} />
+                  <h4>لم يتم العثور على أي نصوص واضحة في هذه الصورة</h4>
+                  <p>تأكد من وضوح النص في الصورة ثم أعد الفحص إن لزم الأمر</p>
+                  <button className="btn" onClick={() => handleExtractOcr(true)} style={{ marginTop: 12 }}>
+                    إعادة الفحص (Re-scan)
+                  </button>
+                </div>
+              ) : (
+                <div className="preview-ocr-content selectable">
+                  <div className="preview-ocr-stats-bar">
+                    <span>
+                      <strong>{ocrLines.length}</strong> سطر
+                    </span>
+                    <span>•</span>
+                    <span>
+                      <strong>{ocrText.trim().split(/\s+/).filter(Boolean).length}</strong> كلمة
+                    </span>
+                    <span>•</span>
+                    <span>
+                      <strong>{ocrText.length}</strong> حرف
+                    </span>
+                  </div>
+                  <div className="preview-code-viewer selectable wrap-lines">
+                    <div className="code-line-numbers" aria-hidden="true">
+                      {ocrText.split("\n").map((_, i) => (
+                        <span key={i}>{i + 1}</span>
+                      ))}
+                    </div>
+                    <pre className="code-content ocr-text-view">
+                      <code>{ocrText}</code>
+                    </pre>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -415,6 +554,22 @@ export function Preview({ item, onClose }: Props) {
               <Icon name={copied ? "check" : "copy"} size={13} />
               {copied ? "تم النسخ!" : "نسخ للمحفظة"}
             </button>
+            {activeType === "image" && (
+              <button
+                className={`btn${imageTab === "ocr" ? " primary" : ""}`}
+                onClick={() => {
+                  if (imageTab === "image") {
+                    setImageTab("ocr");
+                    if (!ocrText && !isOcrLoading) handleExtractOcr(false);
+                  } else {
+                    setImageTab("image");
+                  }
+                }}
+              >
+                <Icon name="scan" size={13} />
+                {imageTab === "image" ? "استخراج النص (OneOCR)" : "عرض الصورة"}
+              </button>
+            )}
             {activeType === "image" && item.kind === "image" && (
               <button className="btn" onClick={handleSaveImage}>
                 <Icon name="download" size={13} /> حفظ باسم…

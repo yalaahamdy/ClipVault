@@ -6,6 +6,7 @@ mod commands;
 mod db;
 mod models;
 mod monitor;
+mod ocr;
 mod vault;
 
 use std::path::PathBuf;
@@ -106,6 +107,9 @@ pub fn run() {
             commands::vault_import_csv,
             commands::vault_import_from_file_path,
             commands::vault_export_csv,
+            commands::ocr_status,
+            commands::ocr_extract_text,
+            commands::ocr_extract_file,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -3,6 +3,7 @@ import type {
   CollectionWithCount,
   Item,
   ItemsPage,
+  OcrResult,
   Settings,
   SortOption,
   SourceAppStat,
@@ -164,6 +165,18 @@ export const api = {
   openExternalUrl(url: string): Promise<void> {
     return call<void>("open_external_url", { url });
   },
+
+  extractOcr(itemId: number, force = false): Promise<OcrResult> {
+    return call<OcrResult>("ocr_extract_text", { id: itemId, force });
+  },
+
+  getOcrStatus(): Promise<boolean> {
+    return call<boolean>("ocr_status");
+  },
+
+  extractOcrFile(path: string): Promise<OcrResult> {
+    return call<OcrResult>("ocr_extract_file", { path });
+  },
 };
 
 export const vaultApi = {
@@ -223,6 +236,7 @@ export const vaultApi = {
     return call<string>("vault_export_csv");
   },
 };
+
 
 
 

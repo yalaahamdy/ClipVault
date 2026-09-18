@@ -1041,6 +1041,86 @@ pub fn vault_export_csv(state: State<crate::AppState>) -> Result<String, String>
     Ok(vault::generate_chrome_csv(&items))
 }
 
+// ---------------------------------------------------------------- ocr
+
+#[tauri::command]
+pub fn ocr_status(app: AppHandle) -> Result<bool, String> {
+    Ok(crate::ocr::find_ocr_executable(Some(&app)).is_some())
+}
+
+#[tauri::command]
+pub fn ocr_extract_text(
+    app: AppHandle,
+    state: State<crate::AppState>,
+    id: i64,
+    force: Option<bool>,
+) -> Result<crate::ocr::OcrResult, String> {
+    let item = state
+        .lock_db()
+        .get_item(id)?
+        .ok_or_else(|| format!("العنصر رقم {id} غير موجود."))?;
+
+    // If already extracted and not forced, return cached result
+    if force != Some(true) {
+        if let Some(ref text) = item.ocr_text {
+            if !text.trim().is_empty() {
+                let lines = text
+                    .lines()
+                    .enumerate()
+                    .map(|(i, l)| crate::ocr::OcrLine {
+                        index: i as i32,
+                        text: l.to_string(),
+                    })
+                    .collect();
+                return Ok(crate::ocr::OcrResult {
+                    text: text.clone(),
+                    lines,
+                });
+            }
+        }
+    }
+
+    // Determine target image path
+    let image_path = if item.image {
+        state.images_dir.join(format!("{id}.png"))
+    } else if item.kind == "files" {
+        let first_file = item
+            .files
+            .as_ref()
+            .and_then(|files| files.first())
+            .ok_or_else(|| "لم يتم العثور على أي ملف مرتبط بهذا العنصر.".to_string())?;
+        let p = PathBuf::from(first_file);
+        if !p.exists() {
+            return Err(format!("الملف غير موجود على القرص: {}", p.display()));
+        }
+        p
+    } else {
+        return Err("العنصر المحدد لا يحتوي على صورة صالحة للتعرف الضوئي.".to_string());
+    };
+
+    let res = crate::ocr::run_ocr_on_file(&image_path, Some(&app))?;
+
+    // Save to database
+    state.lock_db().update_item_ocr_text(id, &res.text)?;
+
+    // Emit updated item so frontend cards and lists refresh immediately
+    if let Ok(Some(updated)) = state.lock_db().get_item(id) {
+        let _ = app.emit("clipvault:item-updated", &updated);
+    }
+
+    Ok(res)
+}
+
+#[tauri::command]
+pub fn ocr_extract_file(
+    app: AppHandle,
+    path: String,
+) -> Result<crate::ocr::OcrResult, String> {
+    let p = PathBuf::from(path);
+    crate::ocr::run_ocr_on_file(&p, Some(&app))
+}
+
+
 
 
 

@@ -215,7 +215,10 @@ export default function App() {
       setFilter("all");
       setOrgFilter(null);
     });
-    return () => { un1.then((f) => f()); un2.then((f) => f()); un3.then((f) => f()); un4.then((f) => f()); un5.then((f) => f()); };
+    const un6 = listen<Item>("clipvault:item-updated", (e) => {
+      setItems((prev) => prev.map((it) => (it.id === e.payload.id ? e.payload : it)));
+    });
+    return () => { un1.then((f) => f()); un2.then((f) => f()); un3.then((f) => f()); un4.then((f) => f()); un5.then((f) => f()); un6.then((f) => f()); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload, loadTags]);
 
@@ -311,6 +314,25 @@ export default function App() {
       case "reveal":
         api.revealItem(item.id).catch((err) => notify(String(err), true));
         break;
+      case "ocr":
+        notify("جارٍ استخراج النص بتقنية OneOCR...");
+        api.extractOcr(item.id)
+          .then((res: { text: string }) => {
+            if (res.text) {
+              navigator.clipboard.writeText(res.text).catch(() => {});
+              notify("تم استخراج النص ونسخه للحافظة بنجاح!");
+            } else {
+              notify("لم يتم العثور على أي نصوص واضحة في الصورة.", true);
+            }
+          })
+          .catch((err: unknown) => notify(String(err), true));
+        break;
+      case "copy-ocr":
+        if (item.ocrText) {
+          navigator.clipboard.writeText(item.ocrText).catch(() => {});
+          notify("تم نسخ النص المستخرج!");
+        }
+        break;
     }
   }, [doCopy, doPaste, notify, toggleFlag]);
 
@@ -331,6 +353,25 @@ export default function App() {
         break;
       case "reveal":
         api.revealItem(item.id).catch((err) => notify(String(err), true));
+        break;
+      case "ocr":
+        notify("جارٍ استخراج النص بتقنية OneOCR...");
+        api.extractOcr(item.id)
+          .then((res: { text: string }) => {
+            if (res.text) {
+              navigator.clipboard.writeText(res.text).catch(() => {});
+              notify("تم استخراج النص ونسخه للحافظة بنجاح!");
+            } else {
+              notify("لم يتم العثور على أي نصوص واضحة في الصورة.", true);
+            }
+          })
+          .catch((err: unknown) => notify(String(err), true));
+        break;
+      case "copy-ocr":
+        if (item.ocrText) {
+          navigator.clipboard.writeText(item.ocrText).catch(() => {});
+          notify("تم نسخ النص المستخرج!");
+        }
         break;
       case "toggle-tag":
         if (a.tagId != null) {

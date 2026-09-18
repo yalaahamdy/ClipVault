@@ -12,4 +12,5 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.csv
+*.exe
 

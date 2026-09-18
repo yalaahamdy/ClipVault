@@ -422,7 +422,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
   // SCREEN 3: Unlocked Vault Main Dashboard
   // -------------------------------------------------------------
   return (
-    <div className="vault-dashboard">
+    <main className="vault-dashboard">
       {/* 1. Top Search & Quick Actions Bar */}
       <div className="vault-search-row">
         <div className="vault-search-wrap">
@@ -1242,6 +1242,6 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
           </div>
         </div>
       )}
-    </div>
+    </main>
   );
 }

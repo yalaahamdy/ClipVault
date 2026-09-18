@@ -7,7 +7,7 @@
   ### مدير الحافظة الأسرع والأكثر أناقة لنظام Windows
   **The Ultra-Fast, Private & Beautiful Local-First Clipboard Manager for Windows**
 
-  [![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/ClipVault/ClipVault/releases)
+  [![Release](https://img.shields.io/badge/Release-v1.0.0-38bdf8?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/yalaahamdy/ClipVault/releases)
   [![License: MIT](https://img.shields.io/badge/License-MIT-4ade80?style=for-the-badge)](LICENSE)
   [![Rust](https://img.shields.io/badge/Rust-2021_Edition-f97316?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
   [![Tauri](https://img.shields.io/badge/Tauri-v2.0-24c8db?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
@@ -99,7 +99,7 @@
 ## 🚀 التحميل والتثبيت (Download & Install)
 
 ### الطريقة المباشرة (المثبت الرسمي)
-يمكنك تحميل أحدث نسخة من مثبت البرنامج لنظام Windows 64-bit مباشرة من صفحة [Releases](https://github.com/ClipVault/ClipVault/releases):
+يمكنك تحميل أحدث نسخة من مثبت البرنامج لنظام Windows 64-bit مباشرة من صفحة [Releases](https://github.com/yalaahamdy/ClipVault/releases):
 - **الملف:** `ClipVault_1.0.0_x64-setup.exe`
 - **الحجم:** خفيف جداً (~5MB إلى 10MB)
 - **المتطلبات:** Windows 10 أو Windows 11
@@ -147,7 +147,7 @@
 ### 2. خطوات البناء
 ```bash
 # استنساخ المستودع
-git clone https://github.com/ClipVault/ClipVault.git
+git clone https://github.com/yalaahamdy/ClipVault.git
 cd ClipVault
 
 # تثبيت الحزم البرمجية

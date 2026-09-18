@@ -57,32 +57,32 @@ export function formatJson(str: string): string {
 
 /**
  * Intelligent HTML Beautifier / Formatter
- * Formats messy or minified HTML into cleanly indented, human-readable markup.
+ * Formats minified or messy HTML into cleanly indented, human-readable markup.
  */
 export function formatHtml(html: string): string {
+  if (!html || !html.trim()) return html;
+
   const tab = "  ";
   let result = "";
   let indent = 0;
 
-  // Normalize and tokenize tags and text nodes
-  const tokens = html
-    .replace(/>\s*</g, "><")
-    .replace(/</g, "~#~<")
-    .replace(/>/g, ">~#~")
-    .split("~#~")
-    .filter((t) => t.trim().length > 0);
+  // Split HTML into structural tokens (comments, doctypes, tags, text)
+  const tokens = html.match(/<!--[\s\S]*?-->|<!DOCTYPE[^>]*>|<\/?[a-zA-Z0-9:-]+(?:\s+[^"'>]*(?:"[^"]*"|'[^']*')?)*\/?>|[^<]+/gi) || [html];
 
   const voidTags = new Set([
     "area", "base", "br", "col", "embed", "hr", "img", "input",
     "link", "meta", "param", "source", "track", "wbr", "!doctype",
   ]);
 
-  for (const token of tokens) {
-    const trimmed = token.trim();
+  for (const rawToken of tokens) {
+    const trimmed = rawToken.trim();
     if (!trimmed) continue;
 
     if (trimmed.startsWith("<!--")) {
       // Comment
+      result += tab.repeat(indent) + trimmed + "\n";
+    } else if (/^<!doctype/i.test(trimmed)) {
+      // Doctype
       result += tab.repeat(indent) + trimmed + "\n";
     } else if (trimmed.startsWith("</")) {
       // Closing tag
@@ -99,7 +99,7 @@ export function formatHtml(html: string): string {
         indent++;
       }
     } else {
-      // Text content
+      // Clean inline text
       result += tab.repeat(indent) + trimmed + "\n";
     }
   }
@@ -194,43 +194,54 @@ export function highlightCode(code: string, lang: SupportedLang): string {
     );
   }
 
-  // 2. HTML / XML Advanced Highlighter
+  // 2. HTML / XML Master Highlighter (VS Code / Tokyo Night Pro Style)
   if (lang === "html" || lang === "xml") {
-    // Process comments first
     let text = code;
-    const commentTokens: string[] = [];
+    const placeholders: string[] = [];
+
+    // 1. Isolate and preserve comments
     text = text.replace(/<!--[\s\S]*?-->/g, (match) => {
-      commentTokens.push(`<span class="tok-comment">${escapeHtml(match)}</span>`);
-      return `___HTML_COMM_${commentTokens.length - 1}___`;
+      placeholders.push(`<span class="tok-comment">${escapeHtml(match)}</span>`);
+      return `___CLIPVAULT_PH_${placeholders.length - 1}___`;
     });
 
-    // Escape markup
+    // 2. Escape remaining HTML markup
     let escaped = escapeHtml(text);
 
-    // Doctype
+    // 3. Highlight Doctype
     escaped = escaped.replace(
       /(&lt;!DOCTYPE[\s\S]*?&gt;)/gi,
       '<span class="tok-doctype">$1</span>'
     );
 
-    // Tags and attributes
+    // 4. Highlight Tags and their Attributes (handles multiline tags, boolean attrs, and string values)
     escaped = escaped.replace(
-      /(&lt;\/?)([a-zA-Z0-9:-]+)((?:\s+[a-zA-Z0-9_:-]+(?:=(?:"[^"]*"|'[^']*'|[^\s&>]+))?)*\s*)(\/?&gt;)/g,
+      /(&lt;\/?)([a-zA-Z0-9:-]+)((?:[\s\S]*?))(\/?&gt;)/g,
       (_match, open, tag, attrs, close) => {
         const highlightedAttrs = attrs.replace(
-          /([a-zA-Z0-9_:-]+)(=)("[^"]*"|'[^']*'|[^\s&>]+)?/g,
-          '<span class="tok-attr">$1</span><span class="tok-punct">$2</span><span class="tok-string">$3</span>'
+          /([a-zA-Z0-9_:-]+)(?:\s*(=)\s*("[^"]*"|'[^']*'|[^\s&>]+))?/g,
+          (_attrMatch: string, attrName: string, eq: string | undefined, val: string | undefined) => {
+            if (!attrName) return "";
+            let res = `<span class="tok-attr">${attrName}</span>`;
+            if (eq) {
+              res += `<span class="tok-punctuation">${eq}</span>`;
+            }
+            if (val) {
+              res += `<span class="tok-string">${val}</span>`;
+            }
+            return res;
+          }
         );
-        return `<span class="tok-punct">${open}</span><span class="tok-tag">${tag}</span>${highlightedAttrs}<span class="tok-punct">${close}</span>`;
+        return `<span class="tok-punctuation">${open}</span><span class="tok-tag">${tag}</span>${highlightedAttrs}<span class="tok-punctuation">${close}</span>`;
       }
     );
 
-    // HTML Entities: &amp;, &lt;, &#123;, etc.
+    // 5. Highlight Entities: &amp;, &lt;, &gt;, &#123;, etc.
     escaped = escaped.replace(/(&amp;[a-zA-Z0-9#]+;)/g, '<span class="tok-entity">$1</span>');
 
-    // Restore comments
-    for (let i = 0; i < commentTokens.length; i++) {
-      escaped = escaped.replace(`___HTML_COMM_${i}___`, commentTokens[i]);
+    // 6. Restore comments
+    for (let i = placeholders.length - 1; i >= 0; i--) {
+      escaped = escaped.replace(`___CLIPVAULT_PH_${i}___`, placeholders[i]);
     }
 
     return escaped;

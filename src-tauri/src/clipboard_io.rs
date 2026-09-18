@@ -37,6 +37,11 @@ pub fn write_to_clipboard(c: &WriteContent) -> Result<(), String> {
     imp::write_to_clipboard(c)
 }
 
+/// Simulate a Ctrl+V key combination to paste into the active foreground window.
+pub fn simulate_paste() {
+    imp::simulate_paste();
+}
+
 // ---------------------------------------------------------------------------
 // Windows implementation
 // ---------------------------------------------------------------------------
@@ -369,6 +374,19 @@ mod imp {
             )
         }
     }
+
+    pub fn simulate_paste() {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_CONTROL,
+        };
+        std::thread::sleep(std::time::Duration::from_millis(45));
+        unsafe {
+            keybd_event(VK_CONTROL.0 as u8, 0, KEYBD_EVENT_FLAGS(0), 0);
+            keybd_event(b'V', 0, KEYBD_EVENT_FLAGS(0), 0);
+            keybd_event(b'V', 0, KEYEVENTF_KEYUP, 0);
+            keybd_event(VK_CONTROL.0 as u8, 0, KEYEVENTF_KEYUP, 0);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -389,4 +407,6 @@ mod imp {
     pub fn write_to_clipboard(_c: &WriteContent) -> Result<(), String> {
         Err("ClipVault يعمل على Windows فقط".into())
     }
+
+    pub fn simulate_paste() {}
 }

@@ -2,7 +2,7 @@ use rusqlite::types::Value;
 use rusqlite::{params, Connection};
 use std::path::Path;
 
-use crate::models::{CollectionDto, Item, ItemsPage, ItemsQuery, TagDto};
+use crate::models::{CollectionDto, Item, ItemsPage, ItemsQuery, SourceAppStat, TagDto};
 
 pub struct Db {
     pub conn: Connection,
@@ -203,6 +203,12 @@ impl Db {
             );
             vals.push(Value::Integer(col_id));
         }
+        if let Some(ref app) = q.source_app {
+            if !app.trim().is_empty() {
+                where_sql.push_str(" AND LOWER(COALESCE(source_app, '')) = LOWER(?)");
+                vals.push(Value::Text(app.trim().to_string()));
+            }
+        }
         if let Some(query) = q.query.as_deref() {
             for token in query.split_whitespace().take(8) {
                 let escaped = token
@@ -232,15 +238,25 @@ impl Db {
                 .map_err(|e| e.to_string())?
         };
 
+        let order_sql = match q.order_by.as_deref() {
+            Some("time_asc") => "pinned DESC, last_used_at ASC, id ASC",
+            Some("use_count_desc") => "pinned DESC, use_count DESC, last_used_at DESC",
+            Some("source_asc") => "pinned DESC, LOWER(COALESCE(source_app, 'zzz')) ASC, last_used_at DESC",
+            Some("source_desc") => "pinned DESC, LOWER(COALESCE(source_app, '')) DESC, last_used_at DESC",
+            Some("length_desc") => "pinned DESC, LENGTH(COALESCE(text, '')) DESC, last_used_at DESC",
+            Some("alpha_asc") => "pinned DESC, LOWER(COALESCE(text, '')) ASC, last_used_at DESC",
+            _ => "pinned DESC, last_used_at DESC, id DESC",
+        };
+
         let mut items: Vec<Item> = Vec::new();
         {
             let sql = format!(
                 "SELECT id, kind, text, html, files, image, source_app, pinned, favorite,
                         sensitive, created_at, last_used_at, use_count
                  FROM items WHERE {}
-                 ORDER BY last_used_at DESC, id DESC
+                 ORDER BY {}
                  LIMIT {} OFFSET {}",
-                where_sql, limit, offset
+                where_sql, order_sql, limit, offset
             );
             let mut stmt = self.conn.prepare(&sql).map_err(|e| e.to_string())?;
             let rows = stmt
@@ -259,6 +275,28 @@ impl Db {
             total,
             has_more,
         })
+    }
+
+    pub fn get_source_apps(&self) -> Result<Vec<SourceAppStat>, String> {
+        let sql = "SELECT COALESCE(source_app, 'أخرى') as app, COUNT(*) as cnt
+                   FROM items
+                   WHERE source_app IS NOT NULL AND TRIM(source_app) != ''
+                   GROUP BY LOWER(source_app)
+                   ORDER BY cnt DESC, app ASC";
+        let mut stmt = self.conn.prepare(sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(SourceAppStat {
+                    name: r.get(0)?,
+                    count: r.get(1)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        let mut res = Vec::new();
+        for row in rows {
+            res.push(row.map_err(|e| e.to_string())?);
+        }
+        Ok(res)
     }
 
     pub fn get_item(&self, id: i64) -> Result<Option<Item>, String> {

@@ -62,6 +62,7 @@ pub fn run() {
             commands::get_items,
             commands::get_item_image,
             commands::copy_item,
+            commands::paste_item,
             commands::delete_item,
             commands::clear_history,
             commands::set_pin,
@@ -86,6 +87,7 @@ pub fn run() {
             commands::reveal_item,
             commands::save_image,
             commands::get_stats,
+            commands::get_sources,
             commands::read_file_as_data_url,
         ])
         .setup(|app| {

@@ -29,6 +29,19 @@ export interface ItemsPage {
   hasMore: boolean;
 }
 
+export type SortOption =
+  | "time_desc"
+  | "time_asc"
+  | "use_count_desc"
+  | "source_asc"
+  | "length_desc"
+  | "alpha_asc";
+
+export interface SourceAppStat {
+  name: string;
+  count: number;
+}
+
 export interface ItemsQueryArgs {
   filter: string;
   query?: string;
@@ -36,6 +49,8 @@ export interface ItemsQueryArgs {
   offset: number;
   tagId?: number | null;
   collectionId?: number | null;
+  orderBy?: SortOption | null;
+  sourceApp?: string | null;
 }
 
 export interface TagWithCount {

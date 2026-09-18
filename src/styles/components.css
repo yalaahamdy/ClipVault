@@ -156,6 +156,139 @@
 .chips-spacer { flex: 1; }
 .chips .icon-btn { width: 28px; height: 28px; }
 
+/* ---------- Sort & Source App Advanced Toolbar ---------- */
+.sort-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 10px 6px;
+  gap: 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.sort-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sort-dropdown-wrap {
+  position: relative;
+}
+.sort-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all var(--fast) var(--ease);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.sort-pill-btn:hover {
+  color: var(--text-1);
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.sort-pill-btn.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.arrow-sym {
+  font-size: 9px;
+  opacity: 0.65;
+  margin-inline-start: 1px;
+}
+
+/* Popover Menu */
+.sort-popover {
+  position: absolute;
+  top: calc(100% + 5px);
+  inset-inline-start: 0;
+  z-index: 80;
+  min-width: 175px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-win), 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.popover-heading {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-3);
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 3px;
+  user-select: none;
+}
+.popover-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 5.5px 8px;
+  cursor: pointer;
+  text-align: right;
+  transition: all var(--fast) var(--ease);
+}
+.popover-item:hover {
+  background: var(--surface-strong);
+  color: var(--text-1);
+}
+.popover-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+.popover-item-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.popover-count-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--surface-strong);
+  color: var(--text-2);
+}
+.popover-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 3px 0;
+}
+.popover-hint {
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 8px;
+  text-align: center;
+}
+.source-active-chip {
+  font-size: 10.5px;
+  padding: 2px 8px;
+}
+
 /* ---------- list ---------- */
 .list {
   flex: 1 1 0%;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { api, PAGE_SIZE } from "./api";
-import type { CollectionWithCount, Item, Settings, TagWithCount } from "./types";
+import type { CollectionWithCount, Item, Settings, SortOption, SourceAppStat, TagWithCount } from "./types";
 import { Icon } from "./icons";
 import { ItemCard, type CardActionEvt } from "./components/ItemCard";
 import { ContextMenu, type MenuAction } from "./components/ContextMenu";
@@ -23,6 +23,15 @@ const FILTERS: Array<{ id: string; label: string; icon: string }> = [
   { id: "pinned", label: "المثبت", icon: "pin" },
 ];
 
+const SORT_OPTIONS: Array<{ id: SortOption; label: string; icon: string }> = [
+  { id: "time_desc", label: "الأحدث أولاً (الوقت)", icon: "clock" },
+  { id: "time_asc", label: "الأقدم أولاً", icon: "clock" },
+  { id: "use_count_desc", label: "الأكثر تكراراً", icon: "sparkles" },
+  { id: "source_asc", label: "حسب التطبيق المصدر", icon: "monitor" },
+  { id: "alpha_asc", label: "أبجدياً (النصوص)", icon: "text" },
+  { id: "length_desc", label: "الأطول محتوى", icon: "columns" },
+];
+
 export default function App() {
   // ---------------- state ----------------
   const [items, setItems] = useState<Item[]>([]);
@@ -31,6 +40,11 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [orgFilter, setOrgFilter] = useState<OrgFilter | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>("time_desc");
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [sources, setSources] = useState<SourceAppStat[]>([]);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [freshIds, setFreshIds] = useState<Set<number>>(new Set());
@@ -53,8 +67,8 @@ export default function App() {
   const searchRef = useRef<HTMLInputElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const firstLoad = useRef(true);
-  const stateRef = useRef({ query, filter, orgFilter });
-  stateRef.current = { query, filter, orgFilter };
+  const stateRef = useRef({ query, filter, orgFilter, sortBy, sourceFilter });
+  stateRef.current = { query, filter, orgFilter, sortBy, sourceFilter };
 
   const notify = useCallback((msg: string, err?: boolean) => setToast({ msg, err }), []);
 
@@ -64,6 +78,13 @@ export default function App() {
   }, []);
 
   // ---------------- data loading ----------------
+  const loadSources = useCallback(async () => {
+    try {
+      const s = await api.getSources();
+      setSources(s);
+    } catch { /* silent */ }
+  }, []);
+
   const loadTags = useCallback(async () => {
     try {
       const [t, c] = await Promise.all([api.getTags(), api.getCollections()]);
@@ -75,7 +96,7 @@ export default function App() {
   const reload = useCallback(async (opts?: { silent?: boolean }) => {
     const showSkeletons = firstLoad.current;
     if (showSkeletons) setLoading(true);
-    const { query: q, filter: f, orgFilter: o } = stateRef.current;
+    const { query: q, filter: f, orgFilter: o, sortBy: sb, sourceFilter: sf } = stateRef.current;
     try {
       const page = await api.getItems(
         f,
@@ -84,6 +105,8 @@ export default function App() {
         0,
         o?.type === "tag" ? o.id : null,
         o?.type === "collection" ? o.id : null,
+        sb,
+        sf,
       );
       setItems(page.items);
       setTotal(page.total);
@@ -99,12 +122,17 @@ export default function App() {
 
   const loadMore = useCallback(async () => {
     if (!hasMore) return;
-    const { query: q, filter: f, orgFilter: o } = stateRef.current;
+    const { query: q, filter: f, orgFilter: o, sortBy: sb, sourceFilter: sf } = stateRef.current;
     try {
       const page = await api.getItems(
-        f, q, PAGE_SIZE, items.length,
+        f,
+        q,
+        PAGE_SIZE,
+        items.length,
         o?.type === "tag" ? o.id : null,
         o?.type === "collection" ? o.id : null,
+        sb,
+        sf,
       );
       setItems((prev) => [...prev, ...page.items]);
       setHasMore(page.hasMore);
@@ -120,18 +148,18 @@ export default function App() {
         applyTheme(s.theme || "dark");
         setPaused(s.paused === "1");
       } catch { /* default dark */ }
-      await Promise.all([reload(), loadTags()]);
+      await Promise.all([reload(), loadTags(), loadSources()]);
       try { await api.frontendReady(); } catch { /* ignore */ }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // debounced search
+  // debounced search & sort/filter change
   useEffect(() => {
     const t = setTimeout(() => reload({ silent: items.length > 0 }), query ? 90 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, filter, orgFilter]);
+  }, [query, filter, orgFilter, sortBy, sourceFilter]);
 
   // infinite scroll
   useEffect(() => {
@@ -190,6 +218,15 @@ export default function App() {
     try {
       await api.copyItem(item.id);
       await api.hideWindow();
+      notify("تم النسخ للمحفظة");
+    } catch (e) {
+      notify(String(e), true);
+    }
+  }, [notify]);
+
+  const doPaste = useCallback(async (item: Item) => {
+    try {
+      await api.pasteItem(item.id);
     } catch (e) {
       notify(String(e), true);
     }
@@ -229,11 +266,12 @@ export default function App() {
       setItems((prev) => prev.filter((p) => p.id !== item.id));
       setTotal((t) => Math.max(0, t - 1));
       loadTags();
+      loadSources();
       notify("تم الحذف");
     } catch (e) {
       notify(String(e), true);
     }
-  }, [loadTags, notify]);
+  }, [loadSources, loadTags, notify]);
 
   const saveEdit = useCallback(async () => {
     if (!editItem) return;
@@ -252,6 +290,7 @@ export default function App() {
   const handleCardAction = useCallback((e: CardActionEvt) => {
     const { item, action } = e;
     switch (action) {
+      case "paste": doPaste(item); break;
       case "copy": doCopy(item); break;
       case "pin": case "favorite": case "sensitive": toggleFlag(item, action); break;
       case "menu": setMenu({ x: e.x ?? 40, y: e.y ?? 40, item }); break;
@@ -267,7 +306,7 @@ export default function App() {
         api.revealItem(item.id).catch((err) => notify(String(err), true));
         break;
     }
-  }, [doCopy, notify, toggleFlag]);
+  }, [doCopy, doPaste, notify, toggleFlag]);
 
   const handleMenuAction = useCallback(async (a: MenuAction, item: Item) => {
     setMenu(null);
@@ -398,7 +437,7 @@ export default function App() {
         if (!mod && e.key === "Enter") {
           e.preventDefault();
           const item = items[selectedIdx] ?? items[0];
-          if (item) doCopy(item);
+          if (item) doPaste(item);
           return;
         }
       }
@@ -571,6 +610,117 @@ export default function App() {
             <Icon name="tag" size={14} />
           </button>
         </nav>
+      )}
+
+      {/* Sort & Source App Advanced Toolbar */}
+      {view === "list" && (
+        <div className="sort-toolbar-row">
+          <div className="sort-toolbar-left">
+            {/* Sort Dropdown */}
+            <div className="sort-dropdown-wrap">
+              <button
+                className={`sort-pill-btn${sortBy !== "time_desc" ? " active" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSortMenuOpen((v) => !v);
+                  setSourceMenuOpen(false);
+                }}
+                title="تغيير طريقة فرز وترتيب العناصر"
+              >
+                <Icon name="columns" size={12} />
+                <span>{SORT_OPTIONS.find((s) => s.id === sortBy)?.label || "الأحدث"}</span>
+                <span className="arrow-sym">▾</span>
+              </button>
+
+              {sortMenuOpen && (
+                <div className="sort-popover animate-in" onClick={(e) => e.stopPropagation()}>
+                  <div className="popover-heading">ترتيب وفرز السجل</div>
+                  {SORT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      className={`popover-item${sortBy === opt.id ? " active" : ""}`}
+                      onClick={() => {
+                        setSortBy(opt.id);
+                        setSortMenuOpen(false);
+                      }}
+                    >
+                      <Icon name={opt.icon} size={13} />
+                      <span className="popover-item-label">{opt.label}</span>
+                      {sortBy === opt.id && <Icon name="check" size={12} />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Source App Filter */}
+            <div className="sort-dropdown-wrap">
+              <button
+                className={`sort-pill-btn${sourceFilter ? " active" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSourceMenuOpen((v) => !v);
+                  setSortMenuOpen(false);
+                  loadSources();
+                }}
+                title="تصفية حسب مصدر النسخ (التطبيق)"
+              >
+                <Icon name="monitor" size={12} />
+                <span>{sourceFilter ? sourceFilter : "كل التطبيقات"}</span>
+                <span className="arrow-sym">▾</span>
+              </button>
+
+              {sourceMenuOpen && (
+                <div className="sort-popover animate-in" onClick={(e) => e.stopPropagation()}>
+                  <div className="popover-heading">تصفية حسب مصدر النسخ</div>
+                  <button
+                    className={`popover-item${!sourceFilter ? " active" : ""}`}
+                    onClick={() => {
+                      setSourceFilter(null);
+                      setSourceMenuOpen(false);
+                    }}
+                  >
+                    <Icon name="clipboard" size={13} />
+                    <span className="popover-item-label">جميع التطبيقات</span>
+                    {!sourceFilter && <Icon name="check" size={12} />}
+                  </button>
+                  <div className="popover-divider" />
+                  {sources.length === 0 ? (
+                    <div className="popover-hint">لا توجد تطبيقات مسجلة بعد</div>
+                  ) : (
+                    sources.map((src) => (
+                      <button
+                        key={src.name}
+                        className={`popover-item${sourceFilter === src.name ? " active" : ""}`}
+                        onClick={() => {
+                          setSourceFilter(src.name);
+                          setSourceMenuOpen(false);
+                        }}
+                      >
+                        <Icon name="monitor" size={13} />
+                        <span className="popover-item-label">{src.name}</span>
+                        <span className="popover-count-pill">{src.count}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Active Source Filter Chip */}
+          {sourceFilter && (
+            <button
+              className="chip active source-active-chip"
+              onClick={() => setSourceFilter(null)}
+              title="إلغاء تصفية المصدر"
+            >
+              <Icon name="monitor" size={11} />
+              <span>{sourceFilter}</span>
+              <span className="chip-x"><Icon name="x" size={10} /></span>
+            </button>
+          )}
+        </div>
       )}
 
       {paused && (

@@ -53,6 +53,15 @@ pub struct ItemsQuery {
     pub offset: i64,
     pub tag_id: Option<i64>,
     pub collection_id: Option<i64>,
+    pub order_by: Option<String>,
+    pub source_app: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceAppStat {
+    pub name: String,
+    pub count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

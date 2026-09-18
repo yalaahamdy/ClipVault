@@ -267,7 +267,21 @@ export function renderMarkdown(md: string): string {
       continue;
     }
 
-    // 11. Regular Paragraph
+    // 11. Raw HTML block elements (GitHub README support: div, center, p, img, details, etc.)
+    const isHtmlBlock = /^<(?:\/)?(div|p|center|details|summary|table|tbody|thead|tr|th|td|section|article|header|footer|img|h[1-6]|sub|sup|ul|ol|li)\b/i.test(
+      trimmed
+    );
+    if (isHtmlBlock) {
+      closeList();
+      closeTable();
+      closeQuote();
+      // Normalize relative image paths in raw HTML
+      const processedHtml = trimmed.replace(/src=["']\.\/([^"']+)["']/g, 'src="/$1"');
+      output.push(processedHtml);
+      continue;
+    }
+
+    // 12. Regular Paragraph
     closeList();
     closeTable();
     closeQuote();
@@ -287,35 +301,48 @@ export function renderMarkdown(md: string): string {
 function inlineFormatting(str: string): string {
   let s = escapeHtml(str);
 
-  // Images: ![alt](url)
+  // 1. Linked badges & images: [![alt](img_url)](target_url)
   s = s.replace(
-    /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
-    '<img src="$2" alt="$1" class="md-img" />'
+    /\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)/g,
+    (_m, alt, imgUrl, targetUrl) => {
+      const cleanImg = imgUrl.trim().replace(/^\.\//, "/");
+      return `<a href="${targetUrl.trim()}" target="_blank" rel="noreferrer" class="md-badge-link"><img src="${cleanImg}" alt="${alt}" class="md-badge-img" /></a>`;
+    }
   );
 
-  // Links: [text](url)
+  // 2. Standalone Images: ![alt](url)
   s = s.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    /!\[([^\]]*)\]\(([^)]+)\)/g,
+    (_m, alt, url) => {
+      const cleanUrl = url.trim().replace(/^\.\//, "/");
+      return `<img src="${cleanUrl}" alt="${alt}" class="md-img" />`;
+    }
+  );
+
+  // 3. Regular Links: [text](url)
+  s = s.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
     '<a href="$2" target="_blank" rel="noreferrer" class="md-link">$1 <span class="md-link-arrow">↗</span></a>'
   );
 
-  // Inline Code: `code`
+  // 4. Inline Code: `code`
   s = s.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
 
-  // Bold & Italic: ***text***
+  // 5. Bold & Italic: ***text***
   s = s.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>");
 
-  // Bold: **text**
+  // 6. Bold: **text**
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
-  // Italic: *text*
+  // 7. Italic: *text*
   s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
 
-  // Strikethrough: ~~text~~
+  // 8. Strikethrough: ~~text~~
   s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
 
-  // Kbd tags: <kbd>Ctrl</kbd>
-  s = s.replace(/&lt;kbd&gt;([\s\S]*?)&lt;\/kbd&gt;/gi, "<kbd>$1</kbd>");
+  // 9. Preserved safe inline HTML tags
+  s = s.replace(/&lt;(kbd|sub|sup|b|i|strong|em|del|mark)&gt;([\s\S]*?)&lt;\/\1&gt;/gi, '<$1>$2</$1>');
+  s = s.replace(/&lt;br\s*\/?&gt;/gi, '<br />');
 
   return s;
 }

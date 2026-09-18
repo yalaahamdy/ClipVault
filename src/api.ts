@@ -4,6 +4,8 @@ import type {
   Item,
   ItemsPage,
   Settings,
+  SortOption,
+  SourceAppStat,
   Stats,
   Tag,
   TagWithCount,
@@ -23,6 +25,8 @@ export const api = {
     offset: number,
     tagId?: number | null,
     collectionId?: number | null,
+    orderBy?: SortOption | null,
+    sourceApp?: string | null,
   ): Promise<ItemsPage> {
     return call<ItemsPage>("get_items", {
       q: {
@@ -32,6 +36,8 @@ export const api = {
         offset,
         tagId: tagId ?? null,
         collectionId: collectionId ?? null,
+        orderBy: orderBy ?? null,
+        sourceApp: sourceApp ?? null,
       },
     });
   },
@@ -42,6 +48,14 @@ export const api = {
 
   copyItem(id: number): Promise<boolean> {
     return call<boolean>("copy_item", { id });
+  },
+
+  pasteItem(id: number): Promise<boolean> {
+    return call<boolean>("paste_item", { id });
+  },
+
+  getSources(): Promise<SourceAppStat[]> {
+    return call<SourceAppStat[]>("get_sources");
   },
 
   deleteItem(id: number): Promise<void> {

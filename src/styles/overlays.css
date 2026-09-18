@@ -495,6 +495,42 @@
   margin: 0 0 12px;
 }
 
+/* GitHub Centered Sections & Badges */
+.preview-markdown-rendered div[align="center"],
+.preview-markdown-rendered p[align="center"] {
+  text-align: center;
+  margin: 18px 0;
+}
+.preview-markdown-rendered div[align="center"] p {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+.preview-markdown-rendered .md-badge-link {
+  display: inline-flex;
+  align-items: center;
+  margin: 3px 4px;
+  text-decoration: none;
+  transition: transform var(--fast) var(--ease);
+}
+.preview-markdown-rendered .md-badge-link:hover {
+  transform: translateY(-1.5px);
+}
+.preview-markdown-rendered .md-badge-img {
+  height: 24px;
+  border-radius: 4px;
+  vertical-align: middle;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+.preview-markdown-rendered img.md-img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card-3d);
+}
+
 /* GitHub Flavored Markdown Alerts */
 .md-alert {
   margin: 14px 0;

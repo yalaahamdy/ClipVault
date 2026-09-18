@@ -8,7 +8,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::clipboard_io::{self, WriteContent};
-use crate::models::{now_ms, CollectionDto, ItemsPage, ItemsQuery, Stats, TagDto};
+use crate::models::{now_ms, CollectionDto, ItemsPage, ItemsQuery, SourceAppStat, Stats, TagDto};
 
 // ---------------------------------------------------------------- helpers
 
@@ -159,6 +159,23 @@ pub fn copy_item(state: State<crate::AppState>, id: i64) -> Result<bool, String>
     clipboard_io::write_to_clipboard(&content)?;
     let _ = state.lock_db().touch_item(id, now_ms());
     Ok(true)
+}
+
+#[tauri::command]
+pub fn paste_item(app: AppHandle, state: State<crate::AppState>, id: i64) -> Result<bool, String> {
+    copy_item(state.clone(), id)?;
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.hide();
+    }
+    std::thread::spawn(|| {
+        clipboard_io::simulate_paste();
+    });
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn get_sources(state: State<crate::AppState>) -> Result<Vec<SourceAppStat>, String> {
+    state.lock_db().get_source_apps()
 }
 
 #[tauri::command]

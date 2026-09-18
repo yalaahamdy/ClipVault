@@ -17,7 +17,7 @@ const thumbCache = new Map<number, string>();
 
 export interface CardActionEvt {
   item: Item;
-  action: "copy" | "pin" | "favorite" | "sensitive" | "edit" | "menu" | "preview" | "save" | "open" | "reveal" | "tags";
+  action: "paste" | "copy" | "pin" | "favorite" | "sensitive" | "edit" | "menu" | "preview" | "save" | "open" | "reveal" | "tags";
   x?: number;
   y?: number;
 }
@@ -92,7 +92,7 @@ export function ItemCard({
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          onAction({ item, action: "copy" });
+          onAction({ item, action: "paste" });
         }
       }}
     >
@@ -100,7 +100,7 @@ export function ItemCard({
 
       <div
         className="card-main"
-        onClick={() => onAction({ item, action: "copy" })}
+        onClick={() => onAction({ item, action: "paste" })}
         onContextMenu={(e) => {
           e.preventDefault();
           onAction({ item, action: "menu", x: e.clientX, y: e.clientY });

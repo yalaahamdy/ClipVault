@@ -17,9 +17,10 @@ import {
 
 interface PasswordVaultProps {
   onNotify: (msg: string, err?: boolean) => void;
+  onItemCountChange?: (count: number) => void;
 }
 
-export function PasswordVault({ onNotify }: PasswordVaultProps) {
+export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProps) {
   // Vault state
   const [status, setStatus] = useState<VaultStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,6 +79,10 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
   useEffect(() => {
     refreshStatus();
   }, [refreshStatus]);
+
+  useEffect(() => {
+    onItemCountChange?.(items.length);
+  }, [items.length, onItemCountChange]);
 
   // Unlock handler
   const handleUnlock = async (e?: React.FormEvent) => {
@@ -418,9 +423,8 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
   // -------------------------------------------------------------
   return (
     <div className="vault-dashboard">
-      {/* Top Vault Actions Bar */}
-      <div className="vault-topbar">
-        {/* Search Input */}
+      {/* 1. Top Search & Quick Actions Bar */}
+      <div className="vault-search-row">
         <div className="vault-search-wrap">
           <Icon name="search" size={15} className="vault-search-ico" />
           <input
@@ -431,122 +435,143 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
             className="vault-search-input"
           />
           {query && (
-            <button className="vault-clear-search" onClick={() => setQuery("")}>
+            <button className="vault-clear-search" onClick={() => setQuery("")} title="مسح">
               <Icon name="x" size={13} />
             </button>
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="vault-actions-group">
-          <button
-            className="vault-btn vault-btn-primary"
-            onClick={() => {
-              setEditingItem({
-                category: "login",
-                title: "",
-                username: "",
-                password: "",
-                website: "",
-                notes: "",
-                favorite: false,
-              });
-              setEditModalOpen(true);
-            }}
-            title="إضافة حساب أو بطاقة جديدة"
-          >
-            <Icon name="plus" size={15} />
-            <span>عنصر جديد</span>
-          </button>
+        <button
+          className="vault-primary-action-btn"
+          onClick={() => {
+            setEditingItem({
+              category: "login",
+              title: "",
+              username: "",
+              password: "",
+              website: "",
+              notes: "",
+              favorite: false,
+            });
+            setEditModalOpen(true);
+          }}
+          title="إضافة حساب أو بطاقة جديدة"
+        >
+          <Icon name="plus" size={15} />
+          <span>عنصر جديد</span>
+        </button>
 
-          <button
-            className="vault-btn"
-            onClick={() => {
-              triggerGenerate();
-              setGeneratorOpen(true);
-            }}
-            title="مولد كلمات مرور احترافي"
-          >
-            <Icon name="sparkles" size={14} />
-            <span>مولد المرور</span>
-          </button>
-
-          <button
-            className="vault-btn"
-            onClick={handleOpenAudit}
-            title="فحص أمان وصحة كلمات المرور"
-          >
-            <Icon name="shield" size={14} />
-            <span>فحص الأمان</span>
-          </button>
-
-          <button
-            className="vault-btn"
-            onClick={() => setImportModalOpen(true)}
-            title="استيراد كلمات المرور من Chrome أو ملف CSV"
-          >
-            <Icon name="upload" size={14} />
-            <span>استيراد CSV</span>
-          </button>
-
-          <button
-            className="vault-btn"
-            onClick={handleExportCsv}
-            title="تصدير كلمات المرور بصيغة Chrome CSV"
-          >
-            <Icon name="download" size={14} />
-            <span>تصدير CSV</span>
-          </button>
-
-          <button
-            className="vault-btn vault-lock-btn"
-            onClick={handleLock}
-            title="قفل الخزينة فوراً"
-          >
-            <Icon name="lock" size={14} />
-            <span>قفل الآن</span>
-          </button>
-        </div>
+        <button
+          className="vault-lock-quick-btn"
+          onClick={handleLock}
+          title="قفل الخزينة فوراً"
+        >
+          <Icon name="lock" size={13} />
+          <span>قفل</span>
+        </button>
       </div>
 
-      {/* Category Pills Bar */}
-      <div className="vault-categories-bar">
+      {/* 2. Scrollable Subnav Bar for Categories & Tools */}
+      <nav
+        className="vault-subnav-scroll"
+        onWheel={(e) => {
+          if (e.deltaY !== 0) {
+            e.currentTarget.scrollLeft += e.deltaY;
+          }
+        }}
+        tabIndex={0}
+      >
         <button
-          className={`vault-cat-pill${categoryFilter === "all" ? " active" : ""}`}
+          className={`chip${categoryFilter === "all" ? " active" : ""}`}
           onClick={() => setCategoryFilter("all")}
+          title="عرض كافة العناصر المحفوظة"
         >
           <Icon name="grid" size={12} />
-          <span>الكل ({items.length})</span>
+          <span>الكل</span>
+          <span className="chip-counter">{items.length}</span>
         </button>
+
         <button
-          className={`vault-cat-pill${categoryFilter === "login" ? " active" : ""}`}
+          className={`chip${categoryFilter === "login" ? " active" : ""}`}
           onClick={() => setCategoryFilter("login")}
+          title="حسابات ومواقع الويب"
         >
           <Icon name="key" size={12} />
-          <span>حسابات ({items.filter((i) => i.category === "login").length})</span>
+          <span>حسابات</span>
+          <span className="chip-counter">{items.filter((i) => i.category === "login").length}</span>
         </button>
+
         <button
-          className={`vault-cat-pill${categoryFilter === "card" ? " active" : ""}`}
+          className={`chip${categoryFilter === "card" ? " active" : ""}`}
           onClick={() => setCategoryFilter("card")}
+          title="بطاقات الدفع والائتمان"
         >
           <Icon name="creditCard" size={12} />
-          <span>بطاقات دفع ({items.filter((i) => i.category === "card").length})</span>
+          <span>بطاقات دفع</span>
+          <span className="chip-counter">{items.filter((i) => i.category === "card").length}</span>
         </button>
+
         <button
-          className={`vault-cat-pill${categoryFilter === "note" ? " active" : ""}`}
+          className={`chip${categoryFilter === "note" ? " active" : ""}`}
           onClick={() => setCategoryFilter("note")}
+          title="ملاحظات سرية وبيانات خاصة"
         >
           <Icon name="fileText" size={12} />
-          <span>ملاحظات سرية ({items.filter((i) => i.category === "note").length})</span>
+          <span>ملاحظات سرية</span>
+          <span className="chip-counter">{items.filter((i) => i.category === "note").length}</span>
         </button>
+
         <button
-          className={`vault-cat-pill${categoryFilter === "favorite" ? " active" : ""}`}
+          className={`chip${categoryFilter === "favorite" ? " active" : ""}`}
           onClick={() => setCategoryFilter("favorite")}
+          title="العناصر المفضلة"
         >
-          <Icon name="star" size={12} />
-          <span>المفضلة ({items.filter((i) => i.favorite).length})</span>
+          <Icon name="star" size={12} filled={categoryFilter === "favorite"} />
+          <span>المفضلة</span>
+          <span className="chip-counter">{items.filter((i) => i.favorite).length}</span>
         </button>
-      </div>
+
+        <div className="vault-subnav-divider" />
+
+        <button
+          className="chip vault-tool-chip"
+          onClick={() => {
+            triggerGenerate();
+            setGeneratorOpen(true);
+          }}
+          title="مولد كلمات مرور قوية وعبارات سرية"
+        >
+          <Icon name="sparkles" size={12} />
+          <span>مولد المرور</span>
+        </button>
+
+        <button
+          className="chip vault-tool-chip"
+          onClick={handleOpenAudit}
+          title="فحص أمان وصحة كلمات المرور وكشف المكرر والضعيف"
+        >
+          <Icon name="shield" size={12} />
+          <span>فحص الأمان</span>
+        </button>
+
+        <button
+          className="chip vault-tool-chip"
+          onClick={() => setImportModalOpen(true)}
+          title="استيراد كلمات المرور من Chrome أو ملف CSV"
+        >
+          <Icon name="upload" size={12} />
+          <span>استيراد CSV</span>
+        </button>
+
+        <button
+          className="chip vault-tool-chip"
+          onClick={handleExportCsv}
+          title="تصدير كلمات المرور بصيغة Chrome CSV"
+        >
+          <Icon name="download" size={12} />
+          <span>تصدير CSV</span>
+        </button>
+      </nav>
 
       {/* Vault Items Grid */}
       {filteredItems.length === 0 ? (
@@ -572,7 +597,7 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
                 {/* Card Header */}
                 <div className="vault-card-header">
                   <div className="vault-card-title-group">
-                    <div className="vault-type-badge">
+                    <div className={`vault-type-badge ${it.category}`}>
                       <Icon
                         name={
                           it.category === "login"
@@ -581,7 +606,7 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
                             ? "creditCard"
                             : "fileText"
                         }
-                        size={13}
+                        size={14}
                       />
                     </div>
                     <div className="vault-card-titles">

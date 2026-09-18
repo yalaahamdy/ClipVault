@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
-import { api, PAGE_SIZE } from "./api";
+import { api, vaultApi, PAGE_SIZE } from "./api";
 import type { CollectionWithCount, Item, Settings, SortOption, SourceAppStat, TagWithCount } from "./types";
 import { Icon } from "./icons";
 import { ItemCard, type CardActionEvt } from "./components/ItemCard";
@@ -53,6 +53,7 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [view, setView] = useState<"home" | "list" | "passwords" | "settings">("home");
+  const [vaultCount, setVaultCount] = useState<number>(0);
 
   const [tags, setTags] = useState<TagWithCount[]>([]);
   const [collections, setCollections] = useState<CollectionWithCount[]>([]);
@@ -150,6 +151,10 @@ export default function App() {
         setPaused(s.paused === "1");
       } catch { /* default dark */ }
       await Promise.all([reload(), loadTags(), loadSources()]);
+      try {
+        const vs = await vaultApi.getStatus();
+        setVaultCount(vs.totalItems);
+      } catch { /* ignore */ }
       try { await api.frontendReady(); } catch { /* ignore */ }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -560,6 +565,7 @@ export default function App() {
           >
             <Icon name="lock" size={13} />
             <span>كلمات المرور</span>
+            {vaultCount > 0 && <span className="tab-count">{vaultCount}</span>}
           </button>
           <button
             className={`nav-tab${view === "settings" ? " active" : ""}`}
@@ -759,7 +765,7 @@ export default function App() {
 
       {/* Password Vault View */}
       {view === "passwords" && (
-        <PasswordVault onNotify={notify} />
+        <PasswordVault onNotify={notify} onItemCountChange={setVaultCount} />
       )}
 
       {/* list */}

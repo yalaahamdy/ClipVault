@@ -1,0 +1,40 @@
+name: 🐛 Bug Report
+description: Report a bug or unintended behavior in ClipVault
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much detail as possible to help us diagnose and fix the bug.
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Provide detailed steps to reproduce the issue.
+      placeholder: |
+        1. Open ClipVault with shortcut Ctrl+Shift+V
+        2. Copy an image from browser
+        3. Observe...
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Windows OS Version
+      placeholder: e.g. Windows 11 23H2 (Build 22631)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ClipVault Version
+      placeholder: e.g. 1.0.0
+    validations:
+      required: true

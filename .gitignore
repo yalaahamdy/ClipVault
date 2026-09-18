@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+*.local
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+.vscode/*
+!.vscode/extensions.json

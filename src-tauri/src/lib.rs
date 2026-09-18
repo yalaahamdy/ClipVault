@@ -6,6 +6,7 @@ mod commands;
 mod db;
 mod models;
 mod monitor;
+mod vault;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,6 +28,7 @@ pub struct AppState {
     pub dialog_open: AtomicBool,
     pub tray_pause_item: Mutex<Option<MenuItem<tauri::Wry>>>,
     pub tray_autostart_item: Mutex<Option<CheckMenuItem<tauri::Wry>>>,
+    pub vault_key: Mutex<Option<[u8; 32]>>,
 }
 
 impl AppState {
@@ -89,6 +91,18 @@ pub fn run() {
             commands::get_stats,
             commands::get_sources,
             commands::read_file_as_data_url,
+            commands::vault_get_status,
+            commands::vault_setup_master,
+            commands::vault_unlock,
+            commands::vault_lock,
+            commands::vault_change_pin,
+            commands::vault_get_items,
+            commands::vault_save_item,
+            commands::vault_delete_item,
+            commands::vault_toggle_favorite,
+            commands::vault_audit,
+            commands::clipboard_clear_secret,
+            commands::open_external_url,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -112,6 +126,7 @@ pub fn run() {
                 dialog_open: AtomicBool::new(false),
                 tray_pause_item: Mutex::new(None),
                 tray_autostart_item: Mutex::new(None),
+                vault_key: Mutex::new(None),
             });
 
             setup_tray(&handle)

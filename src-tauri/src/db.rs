@@ -95,6 +95,31 @@ impl Db {
                 key   TEXT PRIMARY KEY,
                 value TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS vault_settings (
+                id                INTEGER PRIMARY KEY CHECK (id = 1),
+                pin_hash          TEXT NOT NULL,
+                pin_salt          TEXT NOT NULL,
+                auto_lock_minutes INTEGER NOT NULL DEFAULT 15
+            );
+
+            CREATE TABLE IF NOT EXISTS vault_items (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                category        TEXT NOT NULL,
+                title           TEXT NOT NULL,
+                username        TEXT,
+                password_enc    TEXT,
+                website         TEXT,
+                notes_enc       TEXT,
+                card_number_enc TEXT,
+                card_expiry     TEXT,
+                card_cvv_enc    TEXT,
+                favorite        INTEGER NOT NULL DEFAULT 0,
+                created_at      INTEGER NOT NULL,
+                updated_at      INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_vault_category ON vault_items(category);
+            CREATE INDEX IF NOT EXISTS idx_vault_fav ON vault_items(favorite);
             "#,
         )
         .map_err(|e| e.to_string())
@@ -639,4 +664,201 @@ impl Db {
             files: q("SELECT COUNT(*) FROM items WHERE kind = 'files'")?,
         })
     }
+
+    // ---------- password vault ----------
+
+    pub fn vault_is_setup(&self) -> bool {
+        self.conn
+            .query_row(
+                "SELECT COUNT(*) FROM vault_settings WHERE id = 1",
+                [],
+                |r| r.get::<_, i64>(0).map(|c| c > 0),
+            )
+            .unwrap_or(false)
+    }
+
+    pub fn vault_get_security(&self) -> Result<Option<(String, String, i64)>, String> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT pin_hash, pin_salt, auto_lock_minutes FROM vault_settings WHERE id = 1")
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+
+        if let Some(row) = rows.next() {
+            row.map(Some).map_err(|e| e.to_string())
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn vault_setup(&self, pin_hash: &str, pin_salt: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT INTO vault_settings(id, pin_hash, pin_salt, auto_lock_minutes)
+                 VALUES(1, ?1, ?2, 15)
+                 ON CONFLICT(id) DO UPDATE SET pin_hash = excluded.pin_hash, pin_salt = excluded.pin_salt",
+                params![pin_hash, pin_salt],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn vault_count_items(&self) -> Result<i64, String> {
+        self.conn
+            .query_row("SELECT COUNT(*) FROM vault_items", [], |r| r.get(0))
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn vault_get_all_raw(&self) -> Result<Vec<RawVaultRow>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, category, title, username, password_enc, website,
+                        notes_enc, card_number_enc, card_expiry, card_cvv_enc,
+                        favorite, created_at, updated_at
+                 FROM vault_items
+                 ORDER BY favorite DESC, updated_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(RawVaultRow {
+                    id: r.get(0)?,
+                    category: r.get(1)?,
+                    title: r.get(2)?,
+                    username: r.get(3)?,
+                    password_enc: r.get(4)?,
+                    website: r.get(5)?,
+                    notes_enc: r.get(6)?,
+                    card_number_enc: r.get(7)?,
+                    card_expiry: r.get(8)?,
+                    card_cvv_enc: r.get(9)?,
+                    favorite: r.get::<_, i64>(10)? != 0,
+                    created_at: r.get(11)?,
+                    updated_at: r.get(12)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r.map_err(|e| e.to_string())?);
+        }
+        Ok(out)
+    }
+
+    pub fn vault_insert_item(&self, row: &RawVaultRow) -> Result<i64, String> {
+        self.conn
+            .execute(
+                "INSERT INTO vault_items(
+                    category, title, username, password_enc, website,
+                    notes_enc, card_number_enc, card_expiry, card_cvv_enc,
+                    favorite, created_at, updated_at
+                ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                params![
+                    row.category,
+                    row.title,
+                    row.username,
+                    row.password_enc,
+                    row.website,
+                    row.notes_enc,
+                    row.card_number_enc,
+                    row.card_expiry,
+                    row.card_cvv_enc,
+                    row.favorite as i64,
+                    row.created_at,
+                    row.updated_at,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn vault_update_item(&self, row: &RawVaultRow) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE vault_items SET
+                    category = ?1,
+                    title = ?2,
+                    username = ?3,
+                    password_enc = ?4,
+                    website = ?5,
+                    notes_enc = ?6,
+                    card_number_enc = ?7,
+                    card_expiry = ?8,
+                    card_cvv_enc = ?9,
+                    favorite = ?10,
+                    updated_at = ?11
+                 WHERE id = ?12",
+                params![
+                    row.category,
+                    row.title,
+                    row.username,
+                    row.password_enc,
+                    row.website,
+                    row.notes_enc,
+                    row.card_number_enc,
+                    row.card_expiry,
+                    row.card_cvv_enc,
+                    row.favorite as i64,
+                    row.updated_at,
+                    row.id,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn vault_delete_item(&self, id: i64) -> Result<(), String> {
+        self.conn
+            .execute("DELETE FROM vault_items WHERE id = ?1", params![id])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn vault_toggle_favorite(&self, id: i64) -> Result<bool, String> {
+        let current: i64 = self
+            .conn
+            .query_row(
+                "SELECT favorite FROM vault_items WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        let new_fav = if current == 0 { 1 } else { 0 };
+        self.conn
+            .execute(
+                "UPDATE vault_items SET favorite = ?1 WHERE id = ?2",
+                params![new_fav, id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(new_fav != 0)
+    }
 }
+
+#[derive(Debug, Clone)]
+pub struct RawVaultRow {
+    pub id: i64,
+    pub category: String,
+    pub title: String,
+    pub username: Option<String>,
+    pub password_enc: Option<String>,
+    pub website: Option<String>,
+    pub notes_enc: Option<String>,
+    pub card_number_enc: Option<String>,
+    pub card_expiry: Option<String>,
+    pub card_cvv_enc: Option<String>,
+    pub favorite: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+

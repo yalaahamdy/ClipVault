@@ -9,6 +9,11 @@ import type {
   Stats,
   Tag,
   TagWithCount,
+  VaultAuditReport,
+  VaultCategory,
+  VaultItem,
+  VaultItemInput,
+  VaultStatus,
 } from "./types";
 
 export const PAGE_SIZE = 60;
@@ -155,5 +160,56 @@ export const api = {
   frontendReady(): Promise<void> {
     return call<void>("frontend_ready");
   },
+
+  openExternalUrl(url: string): Promise<void> {
+    return call<void>("open_external_url", { url });
+  },
 };
+
+export const vaultApi = {
+  getStatus(): Promise<VaultStatus> {
+    return call<VaultStatus>("vault_get_status");
+  },
+
+  setupMaster(pin: string): Promise<VaultStatus> {
+    return call<VaultStatus>("vault_setup_master", { pin });
+  },
+
+  unlock(pin: string): Promise<VaultStatus> {
+    return call<VaultStatus>("vault_unlock", { pin });
+  },
+
+  lock(): Promise<VaultStatus> {
+    return call<VaultStatus>("vault_lock");
+  },
+
+  changePin(oldPin: string, newPin: string): Promise<VaultStatus> {
+    return call<VaultStatus>("vault_change_pin", { oldPin, newPin });
+  },
+
+  getItems(category?: VaultCategory | "all" | "favorite", query?: string): Promise<VaultItem[]> {
+    return call<VaultItem[]>("vault_get_items", { category: category ?? null, query: query ?? null });
+  },
+
+  saveItem(item: VaultItemInput): Promise<VaultItem> {
+    return call<VaultItem>("vault_save_item", { item });
+  },
+
+  deleteItem(id: number): Promise<void> {
+    return call<void>("vault_delete_item", { id });
+  },
+
+  toggleFavorite(id: number): Promise<boolean> {
+    return call<boolean>("vault_toggle_favorite", { id });
+  },
+
+  audit(): Promise<VaultAuditReport> {
+    return call<VaultAuditReport>("vault_audit");
+  },
+
+  clearSecretFromClipboard(expectedText: string): Promise<void> {
+    return call<void>("clipboard_clear_secret", { expectedText });
+  },
+};
+
 

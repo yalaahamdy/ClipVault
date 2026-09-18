@@ -82,3 +82,59 @@ pub fn now_ms() -> i64 {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultItem {
+    pub id: i64,
+    pub category: String, // "login" | "card" | "note"
+    pub title: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub website: Option<String>,
+    pub notes: Option<String>,
+    pub card_number: Option<String>,
+    pub card_expiry: Option<String>,
+    pub card_cvv: Option<String>,
+    pub favorite: bool,
+    pub strength: i32,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultItemInput {
+    pub id: Option<i64>,
+    pub category: String,
+    pub title: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub website: Option<String>,
+    pub notes: Option<String>,
+    pub card_number: Option<String>,
+    pub card_expiry: Option<String>,
+    pub card_cvv: Option<String>,
+    pub favorite: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultStatus {
+    pub is_setup: bool,
+    pub is_locked: bool,
+    pub auto_lock_minutes: i64,
+    pub total_items: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultAuditReport {
+    pub total: i64,
+    pub weak_count: i64,
+    pub reused_count: i64,
+    pub strong_count: i64,
+    pub weak_item_ids: Vec<i64>,
+    pub reused_item_ids: Vec<i64>,
+}
+

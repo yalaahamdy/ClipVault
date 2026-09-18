@@ -8,7 +8,12 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::clipboard_io::{self, WriteContent};
-use crate::models::{now_ms, CollectionDto, ItemsPage, ItemsQuery, SourceAppStat, Stats, TagDto};
+use crate::db::RawVaultRow;
+use crate::models::{
+    now_ms, CollectionDto, ItemsPage, ItemsQuery, SourceAppStat, Stats, TagDto, VaultAuditReport,
+    VaultItem, VaultItemInput, VaultStatus,
+};
+use crate::vault;
 
 // ---------------------------------------------------------------- helpers
 
@@ -522,4 +527,437 @@ pub fn read_file_as_data_url(path: String) -> Result<String, String> {
     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:{mime};base64,{b64}"))
 }
+
+// ---------------------------------------------------------------- password vault
+
+#[tauri::command]
+pub fn vault_get_status(state: State<crate::AppState>) -> Result<VaultStatus, String> {
+    let db = state.lock_db();
+    let is_setup = db.vault_is_setup();
+    let is_locked = state.vault_key.lock().unwrap().is_none();
+    let sec = db.vault_get_security()?;
+    let auto_lock_minutes = sec.map(|(_, _, m)| m).unwrap_or(15);
+    let total_items = db.vault_count_items().unwrap_or(0);
+    Ok(VaultStatus {
+        is_setup,
+        is_locked,
+        auto_lock_minutes,
+        total_items,
+    })
+}
+
+#[tauri::command]
+pub fn vault_setup_master(pin: String, state: State<crate::AppState>) -> Result<VaultStatus, String> {
+    let clean_pin = pin.trim();
+    if clean_pin.len() < 4 {
+        return Err("يجب أن يتكون رمز المرور من 4 خانات على الأقل".into());
+    }
+    let salt = vault::generate_salt();
+    let key = vault::derive_key(clean_pin, salt.as_bytes());
+
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    let pin_hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(&key));
+
+    state.lock_db().vault_setup(&pin_hash, &salt)?;
+    *state.vault_key.lock().unwrap() = Some(key);
+
+    vault_get_status(state)
+}
+
+#[tauri::command]
+pub fn vault_unlock(pin: String, state: State<crate::AppState>) -> Result<VaultStatus, String> {
+    let sec = state
+        .lock_db()
+        .vault_get_security()?
+        .ok_or_else(|| "لم يتم إعداد رمز المرور للقبو بعد".to_string())?;
+    let (pin_hash, pin_salt, _) = sec;
+    let clean_pin = pin.trim();
+    let key = vault::derive_key(clean_pin, pin_salt.as_bytes());
+
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    let test_hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(&key));
+
+    if test_hash != pin_hash {
+        return Err("رمز الدخول غير صحيح — حاول مرة أخرى".into());
+    }
+
+    *state.vault_key.lock().unwrap() = Some(key);
+    vault_get_status(state)
+}
+
+#[tauri::command]
+pub fn vault_lock(state: State<crate::AppState>) -> Result<VaultStatus, String> {
+    *state.vault_key.lock().unwrap() = None;
+    vault_get_status(state)
+}
+
+#[tauri::command]
+pub fn vault_change_pin(
+    old_pin: String,
+    new_pin: String,
+    state: State<crate::AppState>,
+) -> Result<VaultStatus, String> {
+    let new_clean = new_pin.trim();
+    if new_clean.len() < 4 {
+        return Err("يجب ألا يقل الرمز الجديد عن 4 خانات".into());
+    }
+
+    // Verify old pin
+    let sec = state
+        .lock_db()
+        .vault_get_security()?
+        .ok_or_else(|| "لم يتم إعداد رمز المرور للقبو بعد".to_string())?;
+    let (old_hash, old_salt, _) = sec;
+    let old_key = vault::derive_key(old_pin.trim(), old_salt.as_bytes());
+
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    let check_hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(&old_key));
+    if check_hash != old_hash {
+        return Err("رمز المرور الحالي غير صحيح".into());
+    }
+
+    // Read and decrypt all rows with old key
+    let raw_items = state.lock_db().vault_get_all_raw()?;
+    let new_salt = vault::generate_salt();
+    let new_key = vault::derive_key(new_clean, new_salt.as_bytes());
+    let new_hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(&new_key));
+
+    // Re-encrypt each item
+    for item in raw_items {
+        let dec_pwd = item
+            .password_enc
+            .as_deref()
+            .and_then(|p| vault::decrypt(p, &old_key).ok());
+        let dec_notes = item
+            .notes_enc
+            .as_deref()
+            .and_then(|n| vault::decrypt(n, &old_key).ok());
+        let dec_card = item
+            .card_number_enc
+            .as_deref()
+            .and_then(|c| vault::decrypt(c, &old_key).ok());
+        let dec_cvv = item
+            .card_cvv_enc
+            .as_deref()
+            .and_then(|c| vault::decrypt(c, &old_key).ok());
+
+        let new_pwd_enc = dec_pwd
+            .as_deref()
+            .map(|p| vault::encrypt(p, &new_key))
+            .transpose()?;
+        let new_notes_enc = dec_notes
+            .as_deref()
+            .map(|n| vault::encrypt(n, &new_key))
+            .transpose()?;
+        let new_card_enc = dec_card
+            .as_deref()
+            .map(|c| vault::encrypt(c, &new_key))
+            .transpose()?;
+        let new_cvv_enc = dec_cvv
+            .as_deref()
+            .map(|c| vault::encrypt(c, &new_key))
+            .transpose()?;
+
+        let updated_row = RawVaultRow {
+            password_enc: new_pwd_enc,
+            notes_enc: new_notes_enc,
+            card_number_enc: new_card_enc,
+            card_cvv_enc: new_cvv_enc,
+            ..item
+        };
+        state.lock_db().vault_update_item(&updated_row)?;
+    }
+
+    // Save new pin settings
+    state.lock_db().vault_setup(&new_hash, &new_salt)?;
+    *state.vault_key.lock().unwrap() = Some(new_key);
+
+    vault_get_status(state)
+}
+
+#[tauri::command]
+pub fn vault_get_items(
+    category: Option<String>,
+    query: Option<String>,
+    state: State<crate::AppState>,
+) -> Result<Vec<VaultItem>, String> {
+    let key_guard = state.vault_key.lock().unwrap();
+    let key = key_guard
+        .as_ref()
+        .ok_or_else(|| "القبو مقفل — يرجى إدخال رمز المرور أولاً".to_string())?;
+
+    let raw_rows = state.lock_db().vault_get_all_raw()?;
+    let query_lower = query.as_deref().map(|q| q.to_lowercase());
+    let filter_cat = category.as_deref().filter(|c| *c != "all" && *c != "favorite");
+
+    let mut items = Vec::new();
+
+    for row in raw_rows {
+        // Category filtering
+        if let Some(cat) = filter_cat {
+            if row.category != cat {
+                continue;
+            }
+        } else if category.as_deref() == Some("favorite") && !row.favorite {
+            continue;
+        }
+
+        // Decrypt fields
+        let password = row
+            .password_enc
+            .as_deref()
+            .and_then(|p| vault::decrypt(p, key).ok());
+        let notes = row
+            .notes_enc
+            .as_deref()
+            .and_then(|n| vault::decrypt(n, key).ok());
+        let card_number = row
+            .card_number_enc
+            .as_deref()
+            .and_then(|c| vault::decrypt(c, key).ok());
+        let card_cvv = row
+            .card_cvv_enc
+            .as_deref()
+            .and_then(|c| vault::decrypt(c, key).ok());
+
+        // Text query search
+        if let Some(ref q) = query_lower {
+            let mut matches = row.title.to_lowercase().contains(q);
+            if let Some(ref u) = row.username {
+                matches = matches || u.to_lowercase().contains(q);
+            }
+            if let Some(ref w) = row.website {
+                matches = matches || w.to_lowercase().contains(q);
+            }
+            if let Some(ref n) = notes {
+                matches = matches || n.to_lowercase().contains(q);
+            }
+            if !matches {
+                continue;
+            }
+        }
+
+        let strength = password
+            .as_deref()
+            .map(vault::evaluate_password_strength)
+            .unwrap_or(0);
+
+        items.push(VaultItem {
+            id: row.id,
+            category: row.category,
+            title: row.title,
+            username: row.username,
+            password,
+            website: row.website,
+            notes,
+            card_number,
+            card_expiry: row.card_expiry,
+            card_cvv,
+            favorite: row.favorite,
+            strength,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        });
+    }
+
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn vault_save_item(
+    item: VaultItemInput,
+    state: State<crate::AppState>,
+) -> Result<VaultItem, String> {
+    let key_guard = state.vault_key.lock().unwrap();
+    let key = key_guard
+        .as_ref()
+        .ok_or_else(|| "القبو مقفل — يرجى إدخال رمز المرور أولاً".to_string())?;
+
+    let now = now_ms();
+    let password_enc = item
+        .password
+        .as_deref()
+        .map(|p| vault::encrypt(p, key))
+        .transpose()?;
+    let notes_enc = item
+        .notes
+        .as_deref()
+        .map(|n| vault::encrypt(n, key))
+        .transpose()?;
+    let card_number_enc = item
+        .card_number
+        .as_deref()
+        .map(|c| vault::encrypt(c, key))
+        .transpose()?;
+    let card_cvv_enc = item
+        .card_cvv
+        .as_deref()
+        .map(|c| vault::encrypt(c, key))
+        .transpose()?;
+
+    let strength = item
+        .password
+        .as_deref()
+        .map(vault::evaluate_password_strength)
+        .unwrap_or(0);
+
+    let id = if let Some(item_id) = item.id {
+        let raw = RawVaultRow {
+            id: item_id,
+            category: item.category.clone(),
+            title: item.title.clone(),
+            username: item.username.clone(),
+            password_enc,
+            website: item.website.clone(),
+            notes_enc,
+            card_number_enc,
+            card_expiry: item.card_expiry.clone(),
+            card_cvv_enc,
+            favorite: item.favorite.unwrap_or(false),
+            created_at: now,
+            updated_at: now,
+        };
+        state.lock_db().vault_update_item(&raw)?;
+        item_id
+    } else {
+        let raw = RawVaultRow {
+            id: 0,
+            category: item.category.clone(),
+            title: item.title.clone(),
+            username: item.username.clone(),
+            password_enc,
+            website: item.website.clone(),
+            notes_enc,
+            card_number_enc,
+            card_expiry: item.card_expiry.clone(),
+            card_cvv_enc,
+            favorite: item.favorite.unwrap_or(false),
+            created_at: now,
+            updated_at: now,
+        };
+        state.lock_db().vault_insert_item(&raw)?
+    };
+
+    Ok(VaultItem {
+        id,
+        category: item.category,
+        title: item.title,
+        username: item.username,
+        password: item.password,
+        website: item.website,
+        notes: item.notes,
+        card_number: item.card_number,
+        card_expiry: item.card_expiry,
+        card_cvv: item.card_cvv,
+        favorite: item.favorite.unwrap_or(false),
+        strength,
+        created_at: now,
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub fn vault_delete_item(id: i64, state: State<crate::AppState>) -> Result<(), String> {
+    let key_guard = state.vault_key.lock().unwrap();
+    if key_guard.is_none() {
+        return Err("القبو مقفل".into());
+    }
+    state.lock_db().vault_delete_item(id)
+}
+
+#[tauri::command]
+pub fn vault_toggle_favorite(id: i64, state: State<crate::AppState>) -> Result<bool, String> {
+    let key_guard = state.vault_key.lock().unwrap();
+    if key_guard.is_none() {
+        return Err("القبو مقفل".into());
+    }
+    state.lock_db().vault_toggle_favorite(id)
+}
+
+#[tauri::command]
+pub fn vault_audit(state: State<crate::AppState>) -> Result<VaultAuditReport, String> {
+    let key_guard = state.vault_key.lock().unwrap();
+    let key = key_guard
+        .as_ref()
+        .ok_or_else(|| "القبو مقفل — يرجى إدخال رمز المرور أولاً".to_string())?;
+
+    let raw_rows = state.lock_db().vault_get_all_raw()?;
+    let mut weak_ids = Vec::new();
+    let mut reused_ids = Vec::new();
+    let mut pass_map: HashMap<String, Vec<i64>> = HashMap::new();
+    let mut strong_count = 0;
+    let mut total = 0;
+
+    for row in raw_rows {
+        if row.category != "login" {
+            continue;
+        }
+        total += 1;
+        let password = row
+            .password_enc
+            .as_deref()
+            .and_then(|p| vault::decrypt(p, key).ok())
+            .unwrap_or_default();
+
+        if password.is_empty() {
+            continue;
+        }
+
+        let strength = vault::evaluate_password_strength(&password);
+        if strength <= 1 || password.len() < 8 {
+            weak_ids.push(row.id);
+        } else if strength >= 3 {
+            strong_count += 1;
+        }
+
+        pass_map.entry(password).or_default().push(row.id);
+    }
+
+    for ids in pass_map.values() {
+        if ids.len() > 1 {
+            for id in ids {
+                if !reused_ids.contains(id) {
+                    reused_ids.push(*id);
+                }
+            }
+        }
+    }
+
+    Ok(VaultAuditReport {
+        total,
+        weak_count: weak_ids.len() as i64,
+        reused_count: reused_ids.len() as i64,
+        strong_count,
+        weak_item_ids: weak_ids,
+        reused_item_ids: reused_ids,
+    })
+}
+
+#[tauri::command]
+pub fn clipboard_clear_secret(expected_text: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use clipboard_win::{formats, get_clipboard, set_clipboard_string};
+        if let Ok(current) = get_clipboard(formats::Unicode) {
+            let current: String = current;
+            if current == expected_text {
+                let _ = set_clipboard_string("");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let opener = app.opener();
+    opener.open_url(url, None::<&str>).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+
 

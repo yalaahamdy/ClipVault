@@ -96,3 +96,62 @@ export interface Stats {
   links: number;
   files: number;
 }
+
+export type VaultCategory = "login" | "card" | "note";
+
+export interface VaultItem {
+  id: number;
+  category: VaultCategory;
+  title: string;
+  username?: string | null;
+  password?: string | null;
+  website?: string | null;
+  notes?: string | null;
+  cardNumber?: string | null;
+  cardExpiry?: string | null;
+  cardCvv?: string | null;
+  favorite: boolean;
+  strength: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface VaultItemInput {
+  id?: number | null;
+  category: VaultCategory;
+  title: string;
+  username?: string | null;
+  password?: string | null;
+  website?: string | null;
+  notes?: string | null;
+  cardNumber?: string | null;
+  cardExpiry?: string | null;
+  cardCvv?: string | null;
+  favorite?: boolean;
+}
+
+export interface VaultStatus {
+  isSetup: boolean;
+  isLocked: boolean;
+  autoLockMinutes: number;
+  totalItems: number;
+}
+
+export interface VaultAuditReport {
+  total: number;
+  weakCount: number;
+  reusedCount: number;
+  strongCount: number;
+  weakItemIds: number[];
+  reusedItemIds: number[];
+}
+
+export interface PasswordGeneratorOptions {
+  length: number;
+  uppercase: boolean;
+  lowercase: boolean;
+  numbers: boolean;
+  symbols: boolean;
+  avoidAmbiguous: boolean;
+}
+

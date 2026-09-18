@@ -853,9 +853,9 @@ export default function App() {
               }}
               style={{
                 width: "100%", minHeight: 120, resize: "vertical",
-                background: "var(--surface)", border: "1px solid var(--border)",
-                borderRadius: 8, color: "var(--text-1)", padding: 9,
-                fontSize: 12.8, outline: "none", fontFamily: "inherit",
+                background: "var(--bg-solid)", border: "1px solid var(--border-strong)",
+                borderRadius: 8, color: "var(--text-1)", padding: 10,
+                fontSize: 13, outline: "none", fontFamily: "inherit",
               }}
               autoFocus
             />

@@ -210,6 +210,19 @@ export const vaultApi = {
   clearSecretFromClipboard(expectedText: string): Promise<void> {
     return call<void>("clipboard_clear_secret", { expectedText });
   },
+
+  importCsv(csvContent: string): Promise<number> {
+    return call<number>("vault_import_csv", { csvContent });
+  },
+
+  importFromFile(path: string): Promise<number> {
+    return call<number>("vault_import_from_file_path", { path });
+  },
+
+  exportCsv(): Promise<string> {
+    return call<string>("vault_export_csv");
+  },
 };
+
 
 

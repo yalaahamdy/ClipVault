@@ -1456,11 +1456,11 @@
 }
 
 .vault-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--card);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: 12px;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-card-3d);
   transition: all var(--fast) var(--ease);
   display: flex;
   flex-direction: column;
@@ -1468,9 +1468,10 @@
   position: relative;
 }
 .vault-card:hover {
+  background: var(--card-hover);
   border-color: var(--accent);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .vault-card-header {
@@ -1563,8 +1564,8 @@
 
 /* Password Display Box */
 .vault-password-box {
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
+  background: var(--bg-solid);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 6px 10px;
   display: flex;
@@ -1591,8 +1592,8 @@
 
 /* Card Payment Details */
 .vault-card-payment-info {
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
+  background: var(--bg-solid);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
   font-family: ui-monospace, monospace;
@@ -1698,11 +1699,11 @@
 .vault-lock-card {
   width: 100%;
   max-width: 380px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--card);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   padding: 28px 24px;
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--shadow-win), 0 20px 50px rgba(0, 0, 0, 0.65);
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -1764,8 +1765,8 @@
   width: 100%;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-solid);
   color: var(--text-1);
   font-size: 13px;
   outline: none;
@@ -1784,8 +1785,8 @@
   width: 100%;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-solid);
   color: var(--text-1);
   font-size: 12px;
   outline: none;
@@ -1849,10 +1850,10 @@
 .vault-modal-box {
   width: 100%;
   max-width: 440px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--card);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--shadow-win), 0 24px 64px rgba(0, 0, 0, 0.75);
   overflow: hidden;
   max-height: 90vh;
   display: flex;
@@ -1863,7 +1864,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
+  background: var(--bg-solid);
+  border-bottom: 1px solid var(--border-strong);
 }
 .vault-modal-header h3 {
   margin: 0;
@@ -1889,6 +1891,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  background: var(--card);
 }
 .vault-form-row {
   display: flex;
@@ -1920,8 +1923,8 @@
   font-size: 11px;
   font-weight: 600;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-solid);
   color: var(--text-2);
   cursor: pointer;
   transition: all var(--fast) var(--ease);
@@ -1958,14 +1961,14 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 18px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-strong);
+  border-top: 1px solid var(--border-strong);
+  background: var(--bg-solid);
 }
 
 /* Generator Modal Output */
 .vault-gen-result-box {
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
+  background: var(--bg-solid);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: 12px 14px;
   display: flex;
@@ -2011,6 +2014,74 @@
   cursor: pointer;
 }
 
+/* CSV Import Modal Styles */
+.vault-import-card {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-solid);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.vault-import-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vault-import-info h4 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.vault-import-info p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.vault-import-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 4px 0;
+}
+.vault-import-divider::before,
+.vault-import-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+.vault-import-divider span {
+  padding: 0 10px;
+}
+.vault-file-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-solid);
+  color: var(--text-1);
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--fast) var(--ease);
+}
+.vault-file-dropzone:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.vault-file-dropzone .sub-hint {
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
 /* Audit Modal */
 .vault-audit-summary-grid {
   display: grid;
@@ -2021,8 +2092,8 @@
   border-radius: var(--radius-md);
   padding: 12px;
   text-align: center;
-  border: 1px solid var(--border);
-  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-solid);
 }
 .vault-audit-card.strong .audit-num { color: #4ade80; }
 .vault-audit-card.weak .audit-num { color: #f87171; }

@@ -99,3 +99,129 @@ pub fn evaluate_password_strength(password: &str) -> i32 {
 
     score.min(4)
 }
+
+#[derive(Debug, Clone)]
+pub struct ChromeLoginRecord {
+    pub name: String,
+    pub url: String,
+    pub username: String,
+    pub password: String,
+    pub note: String,
+}
+
+/// Robust RFC 4180 compliant CSV parser specifically tuned for Google Chrome Passwords CSV export.
+pub fn parse_chrome_csv(csv_content: &str) -> Vec<ChromeLoginRecord> {
+    let mut records = Vec::new();
+    let chars: Vec<char> = csv_content.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    let mut current_record: Vec<String> = Vec::new();
+    let mut current_field = String::new();
+    let mut in_quotes = false;
+
+    while i < len {
+        let c = chars[i];
+
+        if in_quotes {
+            if c == '"' {
+                if i + 1 < len && chars[i + 1] == '"' {
+                    current_field.push('"');
+                    i += 1;
+                } else {
+                    in_quotes = false;
+                }
+            } else {
+                current_field.push(c);
+            }
+        } else if c == '"' {
+            in_quotes = true;
+        } else if c == ',' {
+            current_record.push(current_field.trim().to_string());
+            current_field.clear();
+        } else if c == '\n' || c == '\r' {
+            if c == '\r' && i + 1 < len && chars[i + 1] == '\n' {
+                i += 1;
+            }
+            current_record.push(current_field.trim().to_string());
+            current_field.clear();
+
+            if !current_record.is_empty() && current_record.iter().any(|f| !f.is_empty()) {
+                let first_lower = current_record[0].to_lowercase();
+                if first_lower != "name" || current_record.len() < 4 {
+                    let name = current_record.first().cloned().unwrap_or_default();
+                    let url = current_record.get(1).cloned().unwrap_or_default();
+                    let username = current_record.get(2).cloned().unwrap_or_default();
+                    let password = current_record.get(3).cloned().unwrap_or_default();
+                    let note = current_record.get(4).cloned().unwrap_or_default();
+
+                    if !name.is_empty() || !url.is_empty() || !username.is_empty() {
+                        records.push(ChromeLoginRecord {
+                            name,
+                            url,
+                            username,
+                            password,
+                            note,
+                        });
+                    }
+                }
+            }
+            current_record.clear();
+        } else {
+            current_field.push(c);
+        }
+        i += 1;
+    }
+
+    if !current_field.is_empty() || !current_record.is_empty() {
+        current_record.push(current_field.trim().to_string());
+        let first_lower = current_record[0].to_lowercase();
+        if first_lower != "name" || current_record.len() < 4 {
+            let name = current_record.first().cloned().unwrap_or_default();
+            let url = current_record.get(1).cloned().unwrap_or_default();
+            let username = current_record.get(2).cloned().unwrap_or_default();
+            let password = current_record.get(3).cloned().unwrap_or_default();
+            let note = current_record.get(4).cloned().unwrap_or_default();
+
+            if !name.is_empty() || !url.is_empty() || !username.is_empty() {
+                records.push(ChromeLoginRecord {
+                    name,
+                    url,
+                    username,
+                    password,
+                    note,
+                });
+            }
+        }
+    }
+
+    records
+}
+
+/// Formats a single field according to RFC 4180 CSV standard.
+fn escape_csv_field(val: &str) -> String {
+    if val.contains(',') || val.contains('"') || val.contains('\n') || val.contains('\r') {
+        let escaped = val.replace('"', "\"\"");
+        format!("\"{}\"", escaped)
+    } else {
+        val.to_string()
+    }
+}
+
+/// Generates a standard Chrome-compatible CSV string from vault login items.
+pub fn generate_chrome_csv(items: &[crate::models::VaultItem]) -> String {
+    let mut out = String::from("name,url,username,password,note\n");
+    for it in items {
+        if it.category != "login" {
+            continue;
+        }
+        let name = escape_csv_field(&it.title);
+        let url = escape_csv_field(it.website.as_deref().unwrap_or(""));
+        let username = escape_csv_field(it.username.as_deref().unwrap_or(""));
+        let password = escape_csv_field(it.password.as_deref().unwrap_or(""));
+        let note = escape_csv_field(it.notes.as_deref().unwrap_or(""));
+        out.push_str(&format!("{},{},{},{},{}\n", name, url, username, password, note));
+    }
+    out
+}
+

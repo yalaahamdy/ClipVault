@@ -959,5 +959,88 @@ pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn vault_import_csv(
+    csv_content: String,
+    state: State<crate::AppState>,
+) -> Result<usize, String> {
+    let key_guard = state.vault_key.lock().unwrap();
+    let key = key_guard
+        .as_ref()
+        .ok_or_else(|| "القبو مقفل — يرجى إدخال رمز المرور أولاً".to_string())?;
+
+    let records = vault::parse_chrome_csv(&csv_content);
+    if records.is_empty() {
+        return Err("لم يتم العثور على أي حسابات صالحة في ملف CSV".to_string());
+    }
+
+    let now = now_ms();
+    let mut imported = 0;
+
+    for rec in records {
+        let password_enc = if !rec.password.is_empty() {
+            Some(vault::encrypt(&rec.password, key)?)
+        } else {
+            None
+        };
+        let notes_enc = if !rec.note.is_empty() {
+            Some(vault::encrypt(&rec.note, key)?)
+        } else {
+            None
+        };
+
+        let raw = RawVaultRow {
+            id: 0,
+            category: "login".to_string(),
+            title: if !rec.name.is_empty() {
+                rec.name
+            } else {
+                "حساب بدون عنوان".to_string()
+            },
+            username: if !rec.username.is_empty() {
+                Some(rec.username)
+            } else {
+                None
+            },
+            password_enc,
+            website: if !rec.url.is_empty() {
+                Some(rec.url)
+            } else {
+                None
+            },
+            notes_enc,
+            card_number_enc: None,
+            card_expiry: None,
+            card_cvv_enc: None,
+            favorite: false,
+            created_at: now,
+            updated_at: now,
+        };
+
+        if state.lock_db().vault_insert_item(&raw).is_ok() {
+            imported += 1;
+        }
+    }
+
+    Ok(imported)
+}
+
+#[tauri::command]
+pub fn vault_import_from_file_path(
+    path: String,
+    state: State<crate::AppState>,
+) -> Result<usize, String> {
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("فشل في قراءة ملف CSV: {}", e))?;
+    vault_import_csv(content, state)
+}
+
+#[tauri::command]
+pub fn vault_export_csv(state: State<crate::AppState>) -> Result<String, String> {
+    let items = vault_get_items(Some("login".to_string()), None, state)?;
+    Ok(vault::generate_chrome_csv(&items))
+}
+
+
 
 

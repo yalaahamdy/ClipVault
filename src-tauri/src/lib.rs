@@ -103,6 +103,9 @@ pub fn run() {
             commands::vault_audit,
             commands::clipboard_clear_secret,
             commands::open_external_url,
+            commands::vault_import_csv,
+            commands::vault_import_from_file_path,
+            commands::vault_export_csv,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -40,6 +40,10 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
   const [auditModalOpen, setAuditModalOpen] = useState(false);
   const [auditReport, setAuditReport] = useState<VaultAuditReport | null>(null);
 
+  // CSV Import / Export
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+
   // Generator Options State
   const [genOpts, setGenOpts] = useState<PasswordGeneratorOptions>({
     length: 16,
@@ -215,6 +219,64 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
       onNotify(String(err), true);
     }
   };
+
+  // Export CSV handler
+  const handleExportCsv = async () => {
+    try {
+      const csv = await vaultApi.exportCsv();
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ClipVault_Chrome_Passwords_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      onNotify("تم تصدير كلمات المرور بصيغة Chrome CSV بنجاح!");
+    } catch (err) {
+      onNotify(String(err), true);
+    }
+  };
+
+  // Direct import of local file
+  const handleDirectImportChrome = async () => {
+    setImporting(true);
+    try {
+      const count = await vaultApi.importFromFile("D:\\Downloads\\ClipVault-source\\Chrome Passwords.csv");
+      const list = await vaultApi.getItems();
+      setItems(list);
+      setImportModalOpen(false);
+      onNotify(`تم بنجاح استيراد وتشفير ${count} حساباً من Chrome Passwords.csv!`);
+    } catch (err) {
+      onNotify(String(err), true);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // File picker import
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const text = ev.target?.result as string;
+      if (!text) return;
+      setImporting(true);
+      try {
+        const count = await vaultApi.importCsv(text);
+        const list = await vaultApi.getItems();
+        setItems(list);
+        setImportModalOpen(false);
+        onNotify(`تم بنجاح استيراد وتشفير ${count} حساباً من ملف CSV!`);
+      } catch (err) {
+        onNotify(String(err), true);
+      } finally {
+        setImporting(false);
+      }
+    };
+    reader.readAsText(file, "UTF-8");
+  };
+
 
   // Generate password trigger
   const triggerGenerate = () => {
@@ -416,6 +478,24 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
           >
             <Icon name="shield" size={14} />
             <span>فحص الأمان</span>
+          </button>
+
+          <button
+            className="vault-btn"
+            onClick={() => setImportModalOpen(true)}
+            title="استيراد كلمات المرور من Chrome أو ملف CSV"
+          >
+            <Icon name="upload" size={14} />
+            <span>استيراد CSV</span>
+          </button>
+
+          <button
+            className="vault-btn"
+            onClick={handleExportCsv}
+            title="تصدير كلمات المرور بصيغة Chrome CSV"
+          >
+            <Icon name="download" size={14} />
+            <span>تصدير CSV</span>
           </button>
 
           <button
@@ -1062,6 +1142,75 @@ export function PasswordVault({ onNotify }: PasswordVaultProps) {
                   onClick={() => setAuditModalOpen(false)}
                 >
                   فهمت ذلك
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ----------------------------------------------------------- */}
+      {/* MODAL 4: CSV Import Modal                                   */}
+      {/* ----------------------------------------------------------- */}
+      {importModalOpen && (
+        <div className="vault-modal-backdrop animate-in" onClick={() => !importing && setImportModalOpen(false)}>
+          <div className="vault-modal-box import-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="vault-modal-header">
+              <h3>استيراد كلمات المرور من Chrome أو ملف CSV</h3>
+              <button className="vault-modal-close" onClick={() => !importing && setImportModalOpen(false)}>
+                <Icon name="x" size={16} />
+              </button>
+            </div>
+
+            <div className="vault-modal-body">
+              {/* Option A: Quick Direct Import */}
+              <div className="vault-import-card direct-option">
+                <div className="vault-import-head">
+                  <div className="vault-type-badge"><Icon name="key" size={14} /></div>
+                  <div className="vault-import-info">
+                    <h4>ملف Chrome Passwords المكتشف</h4>
+                    <p>عُثر على ملف "Chrome Passwords.csv" في مجلد المشروع.</p>
+                  </div>
+                </div>
+                <button
+                  className="vault-btn vault-btn-primary"
+                  onClick={handleDirectImportChrome}
+                  disabled={importing}
+                >
+                  <Icon name="upload" size={13} />
+                  <span>{importing ? "جارٍ الاستيراد والتشفير..." : "استيراد الحسابات الآن"}</span>
+                </button>
+              </div>
+
+              <div className="vault-import-divider">
+                <span>أو اختر ملف CSV من جهازك</span>
+              </div>
+
+              {/* Option B: Custom File Upload */}
+              <div className="vault-import-card upload-option">
+                <input
+                  type="file"
+                  accept=".csv"
+                  id="csv-file-input"
+                  style={{ display: "none" }}
+                  onChange={handleFileUpload}
+                  disabled={importing}
+                />
+                <label htmlFor="csv-file-input" className="vault-file-dropzone">
+                  <Icon name="upload" size={24} />
+                  <span>اضغط لاختيار ملف .csv من المتصفح أو مدير كلمات المرور</span>
+                  <span className="sub-hint">يدعم Google Chrome, Brave, Edge, 1Password CSV</span>
+                </label>
+              </div>
+
+              <div className="vault-modal-footer">
+                <button
+                  type="button"
+                  className="vault-btn"
+                  onClick={() => setImportModalOpen(false)}
+                  disabled={importing}
+                >
+                  إغلاق
                 </button>
               </div>
             </div>

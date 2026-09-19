@@ -55,6 +55,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [view, setView] = useState<"home" | "list" | "passwords" | "typing" | "settings">("home");
   const [vaultCount, setVaultCount] = useState<number>(0);
+  const [importedSpellText, setImportedSpellText] = useState<string>("");
 
   const [tags, setTags] = useState<TagWithCount[]>([]);
   const [collections, setCollections] = useState<CollectionWithCount[]>([]);
@@ -219,7 +220,25 @@ export default function App() {
     const un6 = listen<Item>("clipvault:item-updated", (e) => {
       setItems((prev) => prev.map((it) => (it.id === e.payload.id ? e.payload : it)));
     });
-    return () => { un1.then((f) => f()); un2.then((f) => f()); un3.then((f) => f()); un4.then((f) => f()); un5.then((f) => f()); un6.then((f) => f()); };
+    const un7 = listen<string>("clipvault:open-spellcheck-with-text", (e) => {
+      setView("typing");
+      const text = e.payload || "";
+      setImportedSpellText(text);
+      if (text) {
+        notify(`تم استيراد النص المحدد (${text.slice(0, 20)}${text.length > 20 ? "..." : ""}) للتدقيق`);
+      } else {
+        notify("تم فتح التدقيق الإملائي — الصق أو اكتب النص لفحصه");
+      }
+    });
+    return () => {
+      un1.then((f) => f());
+      un2.then((f) => f());
+      un3.then((f) => f());
+      un4.then((f) => f());
+      un5.then((f) => f());
+      un6.then((f) => f());
+      un7.then((f) => f());
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload, loadTags]);
 
@@ -829,7 +848,11 @@ export default function App() {
 
       {/* Smart Typing & Writing Suite View */}
       {view === "typing" && (
-        <SmartTypingSuite onNotify={notify} />
+        <SmartTypingSuite
+          onNotify={notify}
+          initialSpellText={importedSpellText}
+          onClearInitialSpellText={() => setImportedSpellText("")}
+        />
       )}
 
       {/* list */}

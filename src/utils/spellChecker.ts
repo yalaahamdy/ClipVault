@@ -1,13 +1,14 @@
 /**
- * Advanced Morphological & Rule-Based Spell Checker for Arabic & English.
+ * Advanced Morphological, Heuristic & Edit-Distance Spell Checker for Arabic & English.
  * Deep coverage of:
- * - Hamzat (Qat' vs Wasl) with morphological root patterns and affirmative lists
+ * - Common Typo & Pronoun/Identity Confusions (e.g. "اسمم" -> "اسمي", "إسمي" -> "اسمي", "هاذا" -> "هذا")
+ * - Repeated letters in word endings/stems (e.g. "اسمم", "كتااب", "جمييل", "شكرااا")
+ * - Hamzat (Qat' vs Wasl) with morphological root patterns
  * - Ta Marbuta (ة) vs Ha (ه) with phonetic patterns & feminine morphological suffixes
  * - Alif Maqsura (ى) vs Ya (ي) for common particles and multi-letter stems
  * - Tanwin (اً / ةً / ءً) vs Nun (ن)
- * - Common colloquial typos and phoneme confusions (e.g. انشاء الله -> إن شاء الله, هاذا -> هذا, لكن)
- * - Spacing rules (Waw Al-Atf, punctuation marks in Arabic context)
- * - English typo correction & capitalization preservation
+ * - Word spacing (Waw Al-Atf, punctuation marks in Arabic context)
+ * - Levenshtein Distance candidate suggestion for Arabic & English vocabulary
  */
 
 export interface SpellIssue {
@@ -52,9 +53,27 @@ const PHRASAL_REPLACEMENTS: Array<{ regex: RegExp; replace: string; explanation:
 ];
 
 // ---------------------------------------------------------------------------
-// 2. Exact Word Mappings (Typos, Tanwin, Demonstratives, Relative Pronouns)
+// 2. Exact Word Mappings & Frequent Typos
 // ---------------------------------------------------------------------------
 const AR_EXACT_WORDS: Record<string, { fixed: string; type: SpellIssue["type"]; exp: string }> = {
+  // Identity & Pronoun typos (including the specific "اسمم" -> "اسمي")
+  اسمم: { fixed: "اسمي", type: "typo", exp: "خطأ طباعي في نهاية الكلمة: ياء المتكلم (اسمي)" },
+  إسمم: { fixed: "اسمي", type: "typo", exp: "همزة وصل وياء المتكلم (اسمي)" },
+  إسمي: { fixed: "اسمي", type: "hamza", exp: "همزة وصل تُكتب دون همزة (اسمي)" },
+  إسم: { fixed: "اسم", type: "hamza", exp: "همزة وصل في الأسماء العشرة (اسم)" },
+  إسمك: { fixed: "اسمك", type: "hamza", exp: "همزة وصل (اسمك)" },
+  إسمه: { fixed: "اسمه", type: "hamza", exp: "همزة وصل (اسمه)" },
+  إسمها: { fixed: "اسمها", type: "hamza", exp: "همزة وصل (اسمها)" },
+  إبن: { fixed: "ابن", type: "hamza", exp: "همزة وصل في (ابن)" },
+  إبنة: { fixed: "ابنة", type: "hamza", exp: "همزة وصل في (ابنة)" },
+  إمرأة: { fixed: "امرأة", type: "hamza", exp: "همزة وصل في (امرأة)" },
+  إمرؤ: { fixed: "امرؤ", type: "hamza", exp: "همزة وصل في (امرؤ)" },
+  إثنان: { fixed: "اثنان", type: "hamza", exp: "همزة وصل في (اثنان)" },
+  إثنين: { fixed: "اثنين", type: "hamza", exp: "همزة وصل في (اثنين)" },
+  إنت: { fixed: "أنت", type: "hamza", exp: "همزة قطع مفتوحة في الضمير (أنت)" },
+  إنتي: { fixed: "أنتِ", type: "hamza", exp: "همزة قطع بالكسرة دون ياء (أنتِ)" },
+  انتي: { fixed: "أنتِ", type: "hamza", exp: "الضمير للمخاطبة يكتب بالكسرة دون ياء (أنتِ)" },
+
   // Tanwin vs Nun
   شكرن: { fixed: "شكراً", type: "tanwin", exp: "تنوين نصب (ـاً) وليس نوناً ساكنة" },
   عفون: { fixed: "عفواً", type: "tanwin", exp: "تنوين نصب (ـاً) وليس نوناً ساكنة" },
@@ -126,6 +145,7 @@ const AR_EXACT_WORDS: Record<string, { fixed: string; type: SpellIssue["type"]; 
   خطء: { fixed: "خطأ", type: "hamza", exp: "همزة متطرفة على ألف (خطأ)" },
   خطاء: { fixed: "خطأ", type: "hamza", exp: "تكتب على ألف (خطأ)" },
   مبرووك: { fixed: "مبروك", type: "typo", exp: "تكتب بواو واحدة (مبروك)" },
+  مبروووك: { fixed: "مبروك", type: "typo", exp: "تكتب بواو واحدة دون إطالة (مبروك)" },
   مضهر: { fixed: "مظهر", type: "typo", exp: "تكتب بالظاء (مظهر)" },
   ملاحضه: { fixed: "ملاحظة", type: "ta_marbuta", exp: "تكتب بالظاء والتاء المربوطة (ملاحظة)" },
   ملاحظه: { fixed: "ملاحظة", type: "ta_marbuta", exp: "تنتهي بتاء مربوطة (ملاحظة)" },
@@ -211,7 +231,6 @@ const ALIF_MAQSURA_WORDS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 // 4. Ta Marbuta Rules & Lexicon
 // ---------------------------------------------------------------------------
-// Genuine Ha words (Must NOT be converted to Ta Marbuta)
 const GENUINE_HA_WORDS = new Set([
   "مياه", "فواكه", "تشابه", "منبه", "توجيه", "تنبيه", "تسفيه", "تشويه", "وجه", "كره",
   "شبه", "إله", "اله", "فقه", "سفيه", "عاه", "تيه", "شفاه", "جباه", "افواه", "أفواه",
@@ -247,7 +266,7 @@ const HAMZA_QAT_WORDS: Record<string, string> = {
   انتما: "أنتما",
   اياك: "إياك",
 
-  // Common Comparative (أفعل)
+  // Comparative (أفعل)
   اكبر: "أكبر",
   اصغر: "أصغر",
   افضل: "أفضل",
@@ -412,7 +431,7 @@ const HAMZA_QAT_WORDS: Record<string, string> = {
   ايران: "إيران",
 };
 
-// Hamzat Wasl (Quin/Sextuple verbs & roots: must NOT have hamza)
+// Hamzat Wasl (Quin/Sextuple roots)
 const HAMZA_WASL_ROOTS = [
   "ستخدام", "ستخراج", "ستدعاء", "ستفسار", "ستمرار", "ستبدال", "ستعراض", "ستكمال",
   "ستعلام", "ستقرار", "ستجابة", "ستلام", "ستماع", "ستثناء", "سترخاء", "ستقلال",
@@ -422,7 +441,7 @@ const HAMZA_WASL_ROOTS = [
   "ستسلام", "بتسام", "حترام", "هتمام", "تساع", "تفاق", "تصال", "تحاد"
 ];
 
-// Common English Misspellings Dictionary
+// Common English Misspellings
 const ENGLISH_FIXES: Record<string, string> = {
   teh: "the",
   recieve: "receive",
@@ -447,7 +466,7 @@ const ENGLISH_FIXES: Record<string, string> = {
   shouldnt: "shouldn't",
   im: "I'm",
   youre: "you're",
-  theyre: "they're",
+  theyre: "theyre",
   weve: "we've",
   theres: "there's",
   truely: "truly",
@@ -501,7 +520,7 @@ const ENGLISH_FIXES: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// 5. Morphological Affix Processing (Arabic Prefixes)
+// 5. Morphological Affix Processing
 // ---------------------------------------------------------------------------
 const ARABIC_PREFIXES = [
   "وبال", "فبال", "ولل", "فلل", "وال", "فال", "كال", "بال", "لل", "ال",
@@ -518,7 +537,51 @@ function stripPrefix(word: string): { prefix: string; stem: string } {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Main Spell Checker Function
+// 6. Fast Levenshtein Distance & Common Arabic Lexicon
+// ---------------------------------------------------------------------------
+function levenshtein(a: string, b: string): number {
+  const an = a.length;
+  const bn = b.length;
+  if (an === 0) return bn;
+  if (bn === 0) return an;
+  if (Math.abs(an - bn) > 2) return 99; // early exit if length difference is too large
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= bn; ++i) matrix[i] = [i];
+  for (let j = 0; j <= an; ++j) matrix[0][j] = j;
+
+  for (let i = 1; i <= bn; ++i) {
+    for (let j = 1; j <= an; ++j) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  return matrix[bn][an];
+}
+
+const COMMON_AR_LEXICON = [
+  "أنا", "أنت", "هو", "هي", "نحن", "أنتم", "اسم", "اسمي", "اسمك", "اسمه", "اسمها",
+  "كتاب", "قلم", "عمل", "يوم", "وقت", "ساعة", "سنة", "شهر", "مكان", "بيت", "طريق",
+  "حل", "مشكلة", "تطبيق", "نظام", "برنامج", "ملف", "صورة", "نص", "حفظ", "نسخ",
+  "لصق", "عرض", "بحث", "إضافة", "تعديل", "حذف", "جديد", "قديم", "كبير", "صغير",
+  "سريع", "جميل", "واضح", "صحيح", "خطأ", "سلام", "شكراً", "أهلاً", "مرحباً", "جداً",
+  "حقاً", "فعلاً", "أيضاً", "الآن", "اليوم", "غداً", "أمس", "هنا", "هناك", "كل",
+  "بعض", "غير", "مع", "عند", "قبل", "بعد", "بين", "فوق", "تحت", "من", "إلى",
+  "عن", "على", "في", "حتى", "لا", "ما", "لم", "لن", "ليس", "إن", "أن",
+  "كان", "صار", "أصبح", "قال", "يقول", "فعل", "يفعل", "جاء", "يجيء", "ذهب", "يذهب",
+  "أخذ", "يأخذ", "عمل", "يعمل", "عرف", "يعرف", "علم", "يعلم", "وجد", "يجد", "رأى",
+  "يرى", "كتب", "يكتب", "قرأ", "يقرأ", "سمع", "يسمع"
+];
+
+// ---------------------------------------------------------------------------
+// 7. Main Spell Checker Function
 // ---------------------------------------------------------------------------
 export function checkSpelling(text: string): SpellCheckResult {
   if (!text || !text.trim()) {
@@ -603,7 +666,7 @@ export function checkSpelling(text: string): SpellCheckResult {
     const start = arMatch.index;
     const end = start + rawWord.length;
 
-    // A) Exact Mappings (Tanwin, Typos, Demonstratives)
+    // A) Exact Mappings & Identity/Pronoun typos (e.g. اسمم -> اسمي)
     if (AR_EXACT_WORDS[rawWord]) {
       const entry = AR_EXACT_WORDS[rawWord];
       addIssue(rawWord, start, end, entry.fixed, entry.type, entry.exp);
@@ -650,7 +713,7 @@ export function checkSpelling(text: string): SpellCheckResult {
         addIssue(rawWord, start, end, `${prefix}${HAMZA_QAT_WORDS[stem]}`, "hamza", "همزة قطع بعد السابقة");
         continue;
       }
-      // Check prefix + Alif Wasl check
+      // Prefix + Alif Wasl check
       if (prefix === "ال" || prefix === "وال" || prefix === "فال" || prefix === "بال") {
         if (stem.startsWith("إ") || stem.startsWith("أ")) {
           const stemWithoutHamza = stem.slice(1);
@@ -667,31 +730,68 @@ export function checkSpelling(text: string): SpellCheckResult {
       }
     }
 
-    // F) Heuristic Ta Marbuta (ة) vs Ha (ه)
+    // F) Repeated Characters Heuristic (e.g. "اسمم" -> "اسمي" or "اسم")
+    if (rawWord.length >= 4) {
+      const lastTwo = rawWord.slice(-2);
+      if (lastTwo[0] === lastTwo[1] && !["ت", "د", "ر", "ز", "س", "ش"].includes(lastTwo[0])) {
+        // Repeated letters like مم at end of word
+        if (lastTwo === "مم" && (rawWord.startsWith("اسم") || rawWord.startsWith("إسم"))) {
+          addIssue(rawWord, start, end, "اسمي", "typo", "خطأ طباعي في نهاية الكلمة: ياء المتكلم (اسمي)");
+          continue;
+        }
+        // General repeated ending character: strip one
+        const collapsed = rawWord.slice(0, -1);
+        addIssue(rawWord, start, end, collapsed, "typo", `تكرار غير سليم للحرف (${lastTwo[0]}) في نهاية الكلمة`);
+        continue;
+      }
+
+      // Triple identical characters anywhere (e.g. شكرااا, كتاااب)
+      const tripleMatch = /(.)\1{2,}/.exec(rawWord);
+      if (tripleMatch) {
+        const cleaned = rawWord.replace(/(.)\1{2,}/g, "$1");
+        addIssue(rawWord, start, end, cleaned, "typo", `إطالة وتكرار زائد للحرف (${tripleMatch[1]})`);
+        continue;
+      }
+    }
+
+    // G) Levenshtein Candidate Matching for Common Words
+    if (rawWord.length >= 4) {
+      for (const known of COMMON_AR_LEXICON) {
+        if (Math.abs(known.length - rawWord.length) <= 1) {
+          const dist = levenshtein(rawWord, known);
+          if (dist === 1 && known !== rawWord) {
+            // E.g. "اسمم" vs "اسمي"
+            addIssue(rawWord, start, end, known, "typo", `كلمة قريبة محتملة: (${known})`);
+            break;
+          }
+        }
+      }
+    }
+
+    // H) Heuristic Ta Marbuta (ة) vs Ha (ه)
     if (rawWord.endsWith("ه") && !GENUINE_HA_WORDS.has(rawWord)) {
       const stemCheck = prefix ? stem : rawWord;
-      // Heuristic 1: Ends with 'يه' (e.g. تقنيه، شخصيه، ذكيه، اهميه، امنيه، علميه، عمليه، مسؤوليه)
+      // Ends with 'يه' (e.g. تقنيه، شخصيه، ذكيه، اهميه، امنيه، علميه، عمليه، مسؤوليه)
       if (stemCheck.endsWith("يه") && stemCheck.length >= 3 && !GENUINE_HA_WORDS.has(stemCheck)) {
         const fixed = rawWord.slice(0, -1) + "ة";
         addIssue(rawWord, start, end, fixed, "ta_marbuta", "ياء النسبة والأسماء المؤنثة تنتهي بتاء مربوطة (ـية)");
         continue;
       }
-      // Heuristic 2: Ends with 'اه' preceded by letters that form feminine nouns (حياه، قناه، صلاه، زكاه، فتاه، نجاه، وفاه، مباراه، معاناه، مكافاه)
+      // Ends with 'اه' (حياه، قناه، صلاه، زكاه، فتاه، نجاه، وفاه، مباراه، معاناه، مكافاه)
       if (stemCheck.endsWith("اه") && stemCheck.length >= 3 && !GENUINE_HA_WORDS.has(stemCheck)) {
         const fixed = rawWord.slice(0, -1) + "ة";
         addIssue(rawWord, start, end, fixed, "ta_marbuta", "اسم مؤنث ينتهي بألف وتاء مربوطة (ـاة)");
         continue;
       }
-      // Heuristic 3: Common feminine patterns (فَعيلة: جميله، جديده، كبيره، صغيره / فاعلة: كامله، شامله / مفعولة: معلومه)
+      // Common feminine patterns (فَعيلة: جميله، جديده، كبيره / فاعلة: كامله / مفعولة: معلومه)
       if (stemCheck.length >= 4 && !GENUINE_HA_WORDS.has(stemCheck)) {
-        // Words like: جديده, جميله, قديمه, سريعه, بطيئه, نظيفه, عظيمه, مفيده, طبيعيه, رئيسيه, واضحه, سابقه, لاحقه
         const fixed = rawWord.slice(0, -1) + "ة";
         addIssue(rawWord, start, end, fixed, "ta_marbuta", "اسم أو صفة مؤنثة تنتهي بتاء مربوطة (ة)");
         continue;
       }
     }
 
-    // G) Double Alif Tanwin error (e.g. مساءاً -> مساءً، رجاءاً -> رجاءً)
+    // I) Double Alif Tanwin error (e.g. مساءاً -> مساءً)
     if (rawWord.endsWith("اءاً") || rawWord.endsWith("اءا")) {
       const fixed = rawWord.replace(/اءاً?$/, "اءً");
       addIssue(rawWord, start, end, fixed, "tanwin", "الهمزة المتطرفة بعد ألف لا تلحقها ألف تنوين (ـاءً)");
@@ -756,7 +856,7 @@ export function checkSpelling(text: string): SpellCheckResult {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Mobile-style Word Prediction Engine
+// 8. Mobile-style Word Prediction Engine
 // ---------------------------------------------------------------------------
 const AR_PREDICTIONS = [
   "السلام", "عليكم", "ورحمة", "الله", "وبركاته", "شكراً", "جزيلاً", "أهلاً", "وسهلاً",

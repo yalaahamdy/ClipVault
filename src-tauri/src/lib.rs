@@ -59,7 +59,9 @@ pub fn run() {
                     if event.state == ShortcutState::Pressed {
                         let sc_str = format!("{shortcut}");
                         if sc_str.to_lowercase().contains("x") {
-                            let _ = crate::typing::fix_selected_text_in_active_window();
+                            let selected_text = crate::typing::get_selected_text_from_active_window();
+                            show_popup_force(app);
+                            let _ = app.emit("clipvault:open-spellcheck-with-text", selected_text);
                         } else {
                             show_popup(app);
                         }
@@ -119,6 +121,7 @@ pub fn run() {
             commands::typing_invert_layout,
             commands::typing_fix_selected_text,
             commands::typing_inject_text,
+            commands::typing_get_selected_text,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -204,6 +207,16 @@ pub fn show_popup(app: &AppHandle) {
             let _ = win.hide();
             return;
         }
+        position_near_cursor(&win);
+        let _ = win.show();
+        let _ = win.set_focus();
+        let _ = app.emit("clipvault:window-shown", ());
+    }
+}
+
+/// Force show and focus the popup window near the cursor (for direct actions like spellcheck shortcut)
+pub fn show_popup_force(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
         position_near_cursor(&win);
         let _ = win.show();
         let _ = win.set_focus();

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { Icon } from "../icons";
 import { typingApi } from "../api";
 import { convertKeyboardLayout, looksLikeLayoutMismatch } from "../utils/keyboardLayout";
@@ -6,12 +7,18 @@ import { checkSpelling, predictWords, SpellCheckResult, SpellIssue } from "../ut
 
 interface SmartTypingSuiteProps {
   onNotify: (msg: string, err?: boolean) => void;
+  initialSpellText?: string;
+  onClearInitialSpellText?: () => void;
 }
 
 type SubTab = "layout" | "spellcheck" | "voice";
 type IssueFilter = "all" | "hamza" | "ta_marbuta" | "tanwin" | "punctuation" | "typo";
 
-export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) => {
+export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
+  onNotify,
+  initialSpellText,
+  onClearInitialSpellText,
+}) => {
   const [activeTab, setActiveTab] = useState<SubTab>("layout");
 
   // ---------------- State: Layout Inverter ----------------
@@ -131,8 +138,15 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
   const handleFixSelectedTextSystemWide = useCallback(async () => {
     setIsFixingSelection(true);
     try {
-      const fixed = await typingApi.fixSelectedText();
-      onNotify(`تم تصحيح النص المحدد: "${fixed.slice(0, 25)}${fixed.length > 25 ? "..." : ""}"`);
+      const selected = await typingApi.getSelectedText();
+      if (selected && selected.trim()) {
+        setActiveTab("spellcheck");
+        handleCheckSpelling(selected);
+        onNotify(`تم سحب النص المحدد (${selected.slice(0, 20)}${selected.length > 20 ? "..." : ""}) وتدقيقه`);
+      } else {
+        const fixed = await typingApi.fixSelectedText();
+        onNotify(`تم تصحيح النص المحدد: "${fixed.slice(0, 25)}${fixed.length > 25 ? "..." : ""}"`);
+      }
     } catch (e) {
       onNotify(String(e) || "تعذر تصحيح النص. حدد نصاً في أي برنامج ثم جرب ثانية.", true);
     } finally {
@@ -150,6 +164,30 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     const result = checkSpelling(text);
     setSpellResult(result);
   }, []);
+
+  // Synchronize initial external spell text (from shortcut or props)
+  useEffect(() => {
+    if (initialSpellText) {
+      setActiveTab("spellcheck");
+      handleCheckSpelling(initialSpellText);
+      onClearInitialSpellText?.();
+    }
+  }, [initialSpellText, handleCheckSpelling, onClearInitialSpellText]);
+
+  // Listen directly to global shortcut event (Ctrl+Shift+X)
+  useEffect(() => {
+    const unlisten = listen<string>("clipvault:open-spellcheck-with-text", (e) => {
+      const text = e.payload || "";
+      setActiveTab("spellcheck");
+      if (text) {
+        handleCheckSpelling(text);
+        onNotify(`تم سحب النص المحدد (${text.slice(0, 20)}${text.length > 20 ? "..." : ""}) وتدقيقه بنجاح`);
+      }
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [handleCheckSpelling, onNotify]);
 
   const handleApplySingleFix = (issue: SpellIssue, suggestion: string) => {
     if (!spellResult) return;

@@ -1138,6 +1138,11 @@ pub fn typing_inject_text(text: String) -> Result<bool, String> {
     Ok(true)
 }
 
+#[tauri::command]
+pub fn typing_get_selected_text() -> Result<String, String> {
+    Ok(crate::typing::get_selected_text_from_active_window())
+}
+
 
 
 

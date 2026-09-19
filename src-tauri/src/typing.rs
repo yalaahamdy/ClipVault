@@ -235,6 +235,23 @@ pub fn simulate_copy() {
 }
 
 #[cfg(windows)]
+pub fn get_selected_text_from_active_window() -> String {
+    use clipboard_win::{formats, Clipboard, Getter};
+    simulate_copy();
+    std::thread::sleep(std::time::Duration::from_millis(80));
+    let mut current_text = String::new();
+    if let Ok(_clip) = Clipboard::new_attempts(10) {
+        let _ = formats::Unicode.read_clipboard(&mut current_text);
+    }
+    current_text
+}
+
+#[cfg(not(windows))]
+pub fn get_selected_text_from_active_window() -> String {
+    String::new()
+}
+
+#[cfg(windows)]
 pub fn fix_selected_text_in_active_window() -> Result<String, String> {
     use clipboard_win::{formats, Clipboard, Getter, Setter};
 

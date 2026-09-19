@@ -249,4 +249,8 @@ export const typingApi = {
   injectText(text: string): Promise<void> {
     return call<void>("typing_inject_text", { text });
   },
+
+  getSelectedText(): Promise<string> {
+    return call<string>("typing_get_selected_text");
+  },
 };

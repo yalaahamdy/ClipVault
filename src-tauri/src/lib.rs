@@ -7,6 +7,7 @@ mod db;
 mod models;
 mod monitor;
 mod ocr;
+mod typing;
 mod vault;
 
 use std::path::PathBuf;
@@ -110,6 +111,9 @@ pub fn run() {
             commands::ocr_status,
             commands::ocr_extract_text,
             commands::ocr_extract_file,
+            commands::typing_invert_layout,
+            commands::typing_fix_selected_text,
+            commands::typing_inject_text,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

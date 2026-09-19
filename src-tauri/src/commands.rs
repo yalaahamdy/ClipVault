@@ -1120,6 +1120,25 @@ pub fn ocr_extract_file(
     crate::ocr::run_ocr_on_file(&p, Some(&app))
 }
 
+// ---------------------------------------------------------------- smart typing
+
+#[tauri::command]
+pub fn typing_invert_layout(text: String) -> Result<crate::typing::InvertResult, String> {
+    Ok(crate::typing::invert_layout(&text))
+}
+
+#[tauri::command]
+pub fn typing_fix_selected_text() -> Result<String, String> {
+    crate::typing::fix_selected_text_in_active_window()
+}
+
+#[tauri::command]
+pub fn typing_inject_text(text: String) -> Result<bool, String> {
+    crate::typing::inject_text_into_active_window(&text)?;
+    Ok(true)
+}
+
+
 
 
 

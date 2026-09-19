@@ -7,6 +7,7 @@ interface Props {
   settings: Settings | null;
   paused: boolean;
   onGoToClipboard: () => void;
+  onGoToTyping?: () => void;
   onGoToSettings: () => void;
   onTogglePause: () => void;
   onToggleTheme: () => void;
@@ -17,6 +18,7 @@ export function HomeView({
   settings,
   paused,
   onGoToClipboard,
+  onGoToTyping,
   onGoToSettings,
   onTogglePause,
   onToggleTheme,
@@ -70,8 +72,8 @@ export function HomeView({
           </div>
         </div>
 
-        {/* Primary Action Button */}
-        <div className="home-cta-wrap">
+        {/* Primary Action Buttons */}
+        <div className="home-cta-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
           <button className="home-cta-btn" onClick={onGoToClipboard}>
             <div className="cta-content">
               <div className="cta-icon">
@@ -91,6 +93,33 @@ export function HomeView({
               </span>
             </div>
           </button>
+
+          {onGoToTyping && (
+            <button
+              className="home-cta-btn"
+              onClick={onGoToTyping}
+              style={{
+                background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
+                boxShadow: "0 4px 14px rgba(142, 68, 173, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.4)",
+              }}
+            >
+              <div className="cta-content">
+                <div className="cta-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
+                  <Icon name="sparkles" size={18} />
+                </div>
+                <div className="cta-text">
+                  <span className="cta-title">الكتابة الذكية والتدقيق</span>
+                  <span className="cta-sub">عكس اللغة، الإملاء الصوتي وتصحيح الأخطاء</span>
+                </div>
+              </div>
+              <div className="cta-arrow">
+                <span className="cta-shortcut">Ctrl+4</span>
+                <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}>
+                  <Icon name="chevronRight" size={16} />
+                </span>
+              </div>
+            </button>
+          )}
         </div>
       </section>
 
@@ -234,6 +263,18 @@ export function HomeView({
               </span>
             </div>
           </div>
+
+          <div className="feature-item">
+            <div className="feature-icon zap">
+              <Icon name="sparkles" size={15} />
+            </div>
+            <div className="feature-text">
+              <span className="feature-title">الكتابة الذكية وعكس اللغة والإملاء الصوتي</span>
+              <span className="feature-desc">
+                تصحيح النصوص المكتوبة بلغة مقلوبة في أي تطبيق، تدقيق إملائي فوري، وكتابة بالصوت.
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -249,6 +290,10 @@ export function HomeView({
           <div className="shortcut-row">
             <span className="sc-desc">فتح / إخفاء الحافظة من أي مكان</span>
             <kbd className="sc-key">{shortcut}</kbd>
+          </div>
+          <div className="shortcut-row">
+            <span className="sc-desc">الكتابة والتدقيق الذكي</span>
+            <kbd className="sc-key">Ctrl+4</kbd>
           </div>
           <div className="shortcut-row">
             <span className="sc-desc">التنقل السريع بين العناصر</span>

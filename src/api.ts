@@ -237,6 +237,16 @@ export const vaultApi = {
   },
 };
 
+export const typingApi = {
+  invertLayout(text: string): Promise<{ original: string; converted: string; sourceLang: string; targetLang: string }> {
+    return call("typing_invert_layout", { text });
+  },
 
+  fixSelectedText(): Promise<string> {
+    return call<string>("typing_fix_selected_text");
+  },
 
-
+  injectText(text: string): Promise<void> {
+    return call<void>("typing_inject_text", { text });
+  },
+};

@@ -11,6 +11,7 @@ import { Preview } from "./components/Preview";
 import { SettingsView } from "./components/SettingsView";
 import { HomeView } from "./components/HomeView";
 import { PasswordVault } from "./components/PasswordVault";
+import { SmartTypingSuite } from "./components/SmartTypingSuite";
 import { EmptyFiltered, EmptyFirstRun, EmptyResults, Skeletons } from "./components/EmptyState";
 import { Toast } from "./components/Toast";
 
@@ -52,7 +53,7 @@ export default function App() {
 
   const [paused, setPaused] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [view, setView] = useState<"home" | "list" | "passwords" | "settings">("home");
+  const [view, setView] = useState<"home" | "list" | "passwords" | "typing" | "settings">("home");
   const [vaultCount, setVaultCount] = useState<number>(0);
 
   const [tags, setTags] = useState<TagWithCount[]>([]);
@@ -433,7 +434,8 @@ export default function App() {
         return;
       }
       if (mod && e.key === "3") { e.preventDefault(); setView("passwords"); return; }
-      if (mod && e.key === "4") { e.preventDefault(); setView("settings"); return; }
+      if (mod && e.key === "4") { e.preventDefault(); setView("typing"); return; }
+      if (mod && e.key === "5") { e.preventDefault(); setView("settings"); return; }
       if (mod && e.key === ",") { e.preventDefault(); setView((v) => (v === "settings" ? "home" : "settings")); return; }
       if (mod && (e.key === "/" || e.key === "?")) { e.preventDefault(); setHelpOpen((v) => !v); return; }
       if (helpOpen && e.key === "Escape") { setHelpOpen(false); return; }
@@ -609,9 +611,17 @@ export default function App() {
             {vaultCount > 0 && <span className="tab-count">{vaultCount}</span>}
           </button>
           <button
+            className={`nav-tab${view === "typing" ? " active" : ""}`}
+            onClick={() => setView("typing")}
+            title="الكتابة والتدقيق الذكي (Ctrl+4)"
+          >
+            <Icon name="sparkles" size={13} />
+            <span>الكتابة الذكية</span>
+          </button>
+          <button
             className={`nav-tab${view === "settings" ? " active" : ""}`}
             onClick={() => setView("settings")}
-            title="الإعدادات (Ctrl+4)"
+            title="الإعدادات (Ctrl+5)"
           >
             <Icon name="settings" size={13} />
             <span>الإعدادات</span>
@@ -797,6 +807,7 @@ export default function App() {
             setView("list");
             setTimeout(() => searchRef.current?.focus(), 30);
           }}
+          onGoToTyping={() => setView("typing")}
           onGoToSettings={() => setView("settings")}
           onTogglePause={() => changePaused(!paused)}
           onToggleTheme={() => applySettingsPatch({ theme: settings?.theme === "light" ? "dark" : "light" })}
@@ -807,6 +818,11 @@ export default function App() {
       {/* Password Vault View */}
       {view === "passwords" && (
         <PasswordVault onNotify={notify} onItemCountChange={setVaultCount} />
+      )}
+
+      {/* Smart Typing & Writing Suite View */}
+      {view === "typing" && (
+        <SmartTypingSuite onNotify={notify} />
       )}
 
       {/* list */}

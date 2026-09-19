@@ -1,6 +1,13 @@
 /**
- * Pro Spell Checker & Word Predictor Engine for Arabic & English.
- * Implements rule-based correction, phonetic typo fixes, and mobile-style word prediction.
+ * Advanced Morphological & Rule-Based Spell Checker for Arabic & English.
+ * Deep coverage of:
+ * - Hamzat (Qat' vs Wasl) with morphological root patterns and affirmative lists
+ * - Ta Marbuta (ة) vs Ha (ه) with phonetic patterns & feminine morphological suffixes
+ * - Alif Maqsura (ى) vs Ya (ي) for common particles and multi-letter stems
+ * - Tanwin (اً / ةً / ءً) vs Nun (ن)
+ * - Common colloquial typos and phoneme confusions (e.g. انشاء الله -> إن شاء الله, هاذا -> هذا, لكن)
+ * - Spacing rules (Waw Al-Atf, punctuation marks in Arabic context)
+ * - English typo correction & capitalization preservation
  */
 
 export interface SpellIssue {
@@ -9,7 +16,7 @@ export interface SpellIssue {
   start: number;
   end: number;
   suggestions: string[];
-  type: "hamza" | "ta_marbuta" | "alif_maqsura" | "tanwin" | "punctuation" | "grammar" | "typo";
+  type: "hamza" | "ta_marbuta" | "alif_maqsura" | "tanwin" | "punctuation" | "waw_spacing" | "typo";
   explanation: string;
 }
 
@@ -19,186 +26,680 @@ export interface SpellCheckResult {
   issues: SpellIssue[];
   wordCount: number;
   score: number; // 0 to 100
+  categoriesCount: {
+    hamza: number;
+    ta_marbuta: number;
+    alif_maqsura: number;
+    tanwin: number;
+    punctuation: number;
+    typo: number;
+  };
 }
 
-// Common Arabic dictionary and heuristic replacements
-const ARABIC_FIXES: Array<{ pattern: RegExp; replace: string; type: SpellIssue["type"]; reason: string }> = [
-  // Hamza fixes
-  { pattern: /\bإست([ء-ي]+)/g, replace: "است$1", type: "hamza", reason: "همزة وصل في مصدر وسداسي (است)" },
-  { pattern: /\bأخت([ء-ي]+)/g, replace: "اخت$1", type: "hamza", reason: "همزة وصل في خماسي" },
-  { pattern: /\bاحمد\b/g, replace: "أحمد", type: "hamza", reason: "همزة قطع في اسم علم" },
-  { pattern: /\bابراهيم\b/g, replace: "إبراهيم", type: "hamza", reason: "همزة قطع في اسم أعجمي" },
-  { pattern: /\bاسماعيل\b/g, replace: "إسماعيل", type: "hamza", reason: "همزة قطع في اسم أعجمي" },
-  { pattern: /\bاسلام\b/g, replace: "إسلام", type: "hamza", reason: "همزة قطع في مصدر رباعي" },
-  { pattern: /\bانسان\b/g, replace: "إنسان", type: "hamza", reason: "همزة قطع مكسورة" },
-  { pattern: /\bالي\b/g, replace: "إلى", type: "hamza", reason: "همزة قطع وألف مقصورة في حرف الجر (إلى)" },
-  { pattern: /\bاذا\b/g, replace: "إذا", type: "hamza", reason: "همزة قطع مكسورة في أداة الشرط (إذا)" },
-  { pattern: /\bايضا\b/g, replace: "أيضاً", type: "hamza", reason: "همزة قطع وتنوين في (أيضاً)" },
-  { pattern: /\bاكثر\b/g, replace: "أكثر", type: "hamza", reason: "همزة قطع في اسم التفضيل" },
-  { pattern: /\bاكبر\b/g, replace: "أكبر", type: "hamza", reason: "همزة قطع في اسم التفضيل" },
-  { pattern: /\bافضل\b/g, replace: "أفضل", type: "hamza", reason: "همزة قطع في اسم التفضيل" },
-  { pattern: /\bاصبح\b/g, replace: "أصبح", type: "hamza", reason: "همزة قطع في فعل رباعي" },
-  { pattern: /\bاراد\b/g, replace: "أراد", type: "hamza", reason: "همزة قطع في فعل رباعي" },
-
-  // Tanwin vs Nun
-  { pattern: /\bشكرن\b/g, replace: "شكراً", type: "tanwin", reason: "تنوين نصب وليس نوناً ساكنة (شكراً)" },
-  { pattern: /\bعفون\b/g, replace: "عفواً", type: "tanwin", reason: "تنوين نصب وليس نوناً (عفواً)" },
-  { pattern: /\bاهلن\b/g, replace: "أهلاً", type: "tanwin", reason: "تنوين نصب وليس نوناً (أهلاً)" },
-  { pattern: /\bسهلن\b/g, replace: "سهلاً", type: "tanwin", reason: "تنوين نصب وليس نوناً (سهلاً)" },
-  { pattern: /\bدائمن\b/g, replace: "دائماً", type: "tanwin", reason: "تنوين نصب وليس نوناً (دائماً)" },
-  { pattern: /\bجدن\b/g, replace: "جداً", type: "tanwin", reason: "تنوين نصب وليس نوناً (جداً)" },
-  { pattern: /\bحاليين\b/g, replace: "حالياً", type: "tanwin", reason: "تنوين نصب في الظرف (حالياً)" },
-
-  // Alif Maqsura vs Ya
-  { pattern: /\bحتي\b/g, replace: "حتى", type: "alif_maqsura", reason: "ألف مقصورة في حرف الغاية (حتى)" },
-  { pattern: /\bعلي\b/g, replace: "على", type: "alif_maqsura", reason: "ألف مقصورة في حرف الجر (على)" },
-  { pattern: /\bمستشفي\b/g, replace: "مستشفى", type: "alif_maqsura", reason: "ألف مقصورة في نهاية الاسم المقصور" },
-  { pattern: /\bمنتدي\b/g, replace: "منتدى", type: "alif_maqsura", reason: "ألف مقصورة في نهاية الاسم المقصور" },
-  { pattern: /\bمعني\b/g, replace: "معنى", type: "alif_maqsura", reason: "ألف مقصورة في نهاية الاسم المقصور" },
-  { pattern: /\bدعوي\b/g, replace: "دعوى", type: "alif_maqsura", reason: "ألف مقصورة" },
-  { pattern: /\bاحدي\b/g, replace: "إحدى", type: "alif_maqsura", reason: "همزة قطع وألف مقصورة (إحدى)" },
-
-  // Ta Marbuta vs Ha
-  { pattern: /\bمدرسه\b/g, replace: "مدرسة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-  { pattern: /\bجامعه\b/g, replace: "جامعة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-  { pattern: /\bصوره\b/g, replace: "صورة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-  { pattern: /\bحياه\b/g, replace: "حياة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-  { pattern: /\bجميله\b/g, replace: "جميلة", type: "ta_marbuta", reason: "تاء مربوطة في الصفة المؤنثة" },
-  { pattern: /\bمكتبه\b/g, replace: "مكتبة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-  { pattern: /\bطريقه\b/g, replace: "طريقة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-  { pattern: /\bحقيقه\b/g, replace: "حقيقة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-  { pattern: /\bرساله\b/g, replace: "رسالة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-  { pattern: /\bفتره\b/g, replace: "فترة", type: "ta_marbuta", reason: "تاء مربوطة تنطق هاء عند الوقف" },
-
-  // Dhad vs Dhaa
-  { pattern: /\bظغط\b/g, replace: "ضغط", type: "typo", reason: "حرف الضاد (ض) وليس الظاء (ظ)" },
-  { pattern: /\bحفض\b/g, replace: "حفظ", type: "typo", reason: "حرف الظاء (ظ) وليس الضاد (ض)" },
-  { pattern: /\bنضام\b/g, replace: "نظام", type: "typo", reason: "حرف الظاء (ظ) وليس الضاد (ض)" },
-  { pattern: /\bمضهر\b/g, replace: "مظهر", type: "typo", reason: "حرف الظاء (ظ) وليس الضاد (ض)" },
-
-  // Conjunction Waw spacing
-  { pattern: /\bو ([ء-ي])/g, replace: "و$1", type: "grammar", reason: "واو العطف لا تفصل عن الكلمة التي تليها بمسافة" },
-
-  // Arabic Punctuation
-  { pattern: / ,/g, replace: "،", type: "punctuation", reason: "الفاصلة العربية (،) بدون مسافة قبلها" },
-  { pattern: / \?/g, replace: "؟", type: "punctuation", reason: "علامة الاستفهام العربية (؟)" },
-  { pattern: / ;/g, replace: "؛", type: "punctuation", reason: "الفاصلة المنقوطة العربية (؛)" },
+// ---------------------------------------------------------------------------
+// 1. Phrasal & Compound Arabic Typos (Exact replacements before tokenization)
+// ---------------------------------------------------------------------------
+const PHRASAL_REPLACEMENTS: Array<{ regex: RegExp; replace: string; explanation: string }> = [
+  { regex: /\bان\s*شاء\s*الله\b/g, replace: "إن شاء الله", explanation: "كتابة (إن شاء الله) منفصلة بالهمزة المكسورة" },
+  { regex: /\bانشاء\s*الله\b/g, replace: "إن شاء الله", explanation: "كتابة (إن شاء الله) منفصلة بالهمزة المكسورة" },
+  { regex: /\bباذن\s*الله\b/g, replace: "بإذن الله", explanation: "همزة قطع مكسورة في (بإذن الله)" },
+  { regex: /\bصلي\s+الله\s+عليه\s+وسلم\b/g, replace: "صلى الله عليه وسلم", explanation: "الألف المقصورة في الفعل الماضي (صلى)" },
+  { regex: /\bصلوات\s+الله\s+وسلامة\s+علية\b/g, replace: "صلوات الله وسلامه عليه", explanation: "الهاء في سلامة عليه (ضمير غائب)" },
+  { regex: /\bجزاك\s+اللة\s+خير\b/g, replace: "جزاك الله خيراً", explanation: "لفظ الجلالة بالهاء وتنوين النصب في خيراً" },
+  { regex: /\bلا\s*حول\s*ولا\s*قوة\s*الا\s*بالله\b/g, replace: "لا حول ولا قوة إلا بالله", explanation: "همزة القطع في أداة الاستثناء (إلا)" },
+  { regex: /\bبسم\s+اللة\b/g, replace: "بسم الله", explanation: "لفظ الجلالة بالهاء المربوطة (الله)" },
+  { regex: /\bالسلام\s+عليكم\s+ورحمة\s+اللة\b/g, replace: "السلام عليكم ورحمة الله", explanation: "لفظ الجلالة بالهاء" },
 ];
 
-// Common English fixes
+// ---------------------------------------------------------------------------
+// 2. Exact Word Mappings (Typos, Tanwin, Demonstratives, Relative Pronouns)
+// ---------------------------------------------------------------------------
+const AR_EXACT_WORDS: Record<string, { fixed: string; type: SpellIssue["type"]; exp: string }> = {
+  // Tanwin vs Nun
+  شكرن: { fixed: "شكراً", type: "tanwin", exp: "تنوين نصب (ـاً) وليس نوناً ساكنة" },
+  عفون: { fixed: "عفواً", type: "tanwin", exp: "تنوين نصب (ـاً) وليس نوناً ساكنة" },
+  اهلن: { fixed: "أهلاً", type: "tanwin", exp: "همزة قطع وتنوين نصب (أهلاً)" },
+  أهلن: { fixed: "أهلاً", type: "tanwin", exp: "تنوين نصب (أهلاً)" },
+  سهلن: { fixed: "سهلاً", type: "tanwin", exp: "تنوين نصب (سهلاً)" },
+  مرحبن: { fixed: "مرحباً", type: "tanwin", exp: "تنوين نصب (مرحباً)" },
+  دائمن: { fixed: "دائماً", type: "tanwin", exp: "تنوين نصب (دائماً)" },
+  دايمن: { fixed: "دائماً", type: "tanwin", exp: "همزة على نبرة وتنوين نصب (دائماً)" },
+  ايضن: { fixed: "أيضاً", type: "tanwin", exp: "همزة قطع وتنوين نصب (أيضاً)" },
+  أيضن: { fixed: "أيضاً", type: "tanwin", exp: "تنوين نصب (أيضاً)" },
+  ابدن: { fixed: "أبداً", type: "tanwin", exp: "همزة قطع وتنوين نصب (أبداً)" },
+  أبدن: { fixed: "أبداً", type: "tanwin", exp: "تنوين نصب (أبداً)" },
+  جدن: { fixed: "جداً", type: "tanwin", exp: "تنوين نصب (جداً)" },
+  حقن: { fixed: "حقاً", type: "tanwin", exp: "تنوين نصب (حقاً)" },
+  فعلن: { fixed: "فعلاً", type: "tanwin", exp: "تنوين نصب (فعلاً)" },
+  حالين: { fixed: "حالياً", type: "tanwin", exp: "تنوين نصب (حالياً)" },
+  حاليين: { fixed: "حالياً", type: "tanwin", exp: "تنوين نصب (حالياً)" },
+  فورن: { fixed: "فوراً", type: "tanwin", exp: "تنوين نصب (فوراً)" },
+  حتمن: { fixed: "حتماً", type: "tanwin", exp: "تنوين نصب (حتماً)" },
+  تمامن: { fixed: "تماماً", type: "tanwin", exp: "تنوين نصب (تماماً)" },
+  اولن: { fixed: "أولاً", type: "tanwin", exp: "همزة قطع وتنوين نصب (أولاً)" },
+  أولن: { fixed: "أولاً", type: "tanwin", exp: "تنوين نصب (أولاً)" },
+  ثانين: { fixed: "ثانياً", type: "tanwin", exp: "تنوين نصب (ثانياً)" },
+  ثالثن: { fixed: "ثالثاً", type: "tanwin", exp: "تنوين نصب (ثالثاً)" },
+  اخيرن: { fixed: "أخيراً", type: "tanwin", exp: "همزة قطع وتنوين نصب (أخيراً)" },
+  أخيرن: { fixed: "أخيراً", type: "tanwin", exp: "تنوين نصب (أخيراً)" },
+  مسبقن: { fixed: "مسبقاً", type: "tanwin", exp: "تنوين نصب (مسبقاً)" },
+  لاحقن: { fixed: "لاحقاً", type: "tanwin", exp: "تنوين نصب (لاحقاً)" },
+  نادرن: { fixed: "نادراً", type: "tanwin", exp: "تنوين نصب (نادراً)" },
+  عمومن: { fixed: "عموماً", type: "tanwin", exp: "تنوين نصب (عموماً)" },
+  خاصتن: { fixed: "خاصةً", type: "tanwin", exp: "تنوين نصب على تاء مربوطة (خاصةً)" },
+  صراحتن: { fixed: "صراحةً", type: "tanwin", exp: "تنوين نصب على تاء مربوطة (صراحةً)" },
+  قطعن: { fixed: "قطعاً", type: "tanwin", exp: "تنوين نصب (قطعاً)" },
+  يقينن: { fixed: "يقيناً", type: "tanwin", exp: "تنوين نصب (يقيناً)" },
+  حبن: { fixed: "حباً", type: "tanwin", exp: "تنوين نصب (حباً)" },
+  اصلن: { fixed: "أصلاً", type: "tanwin", exp: "همزة قطع وتنوين نصب (أصلاً)" },
+  أصلن: { fixed: "أصلاً", type: "tanwin", exp: "تنوين نصب (أصلاً)" },
+  سريعن: { fixed: "سريعاً", type: "tanwin", exp: "تنوين نصب (سريعاً)" },
+  بطيئن: { fixed: "بطيئاً", type: "tanwin", exp: "تنوين نصب (بطيئاً)" },
+  سوين: { fixed: "سوياً", type: "tanwin", exp: "تنوين نصب (سوياً)" },
+  معن: { fixed: "معاً", type: "tanwin", exp: "تنوين نصب (معاً)" },
+  مبدئين: { fixed: "مبدئياً", type: "tanwin", exp: "تنوين نصب (مبدئياً)" },
+  رسمين: { fixed: "رسمياً", type: "tanwin", exp: "تنوين نصب (رسمياً)" },
+  عملين: { fixed: "عملياً", type: "tanwin", exp: "تنوين نصب (عملياً)" },
+  سلفن: { fixed: "سلفاً", type: "tanwin", exp: "تنوين نصب (سلفاً)" },
+
+  // Common spelling typos & colloquial words
+  لاكن: { fixed: "لكن", type: "typo", exp: "تحذف الألف نطقاً ورسماً في (لكن)" },
+  لاكنه: { fixed: "لكنه", type: "typo", exp: "تحذف الألف في (لكنه)" },
+  لاكنها: { fixed: "لكنها", type: "typo", exp: "تحذف الألف في (لكنها)" },
+  لاكنهم: { fixed: "لكنهم", type: "typo", exp: "تحذف الألف في (لكنهم)" },
+  هاذا: { fixed: "هذا", type: "typo", exp: "تحذف ألف المد بعد الهاء في اسم الإشارة (هذا)" },
+  هاذه: { fixed: "هذه", type: "typo", exp: "تحذف ألف المد وتكتب بالهاء في (هذه)" },
+  هاؤلاء: { fixed: "هؤلاء", type: "typo", exp: "تحذف ألف المد بعد الهاء في (هؤلاء)" },
+  هاذان: { fixed: "هذان", type: "typo", exp: "تحذف ألف المد في اسم الإشارة (هذان)" },
+  ذالك: { fixed: "ذلك", type: "typo", exp: "تحذف الألف في اسم الإشارة (ذلك)" },
+  اللذي: { fixed: "الذي", type: "typo", exp: "تكتب بلام واحدة في الاسم الموصول (الذي)" },
+  اللتي: { fixed: "التي", type: "typo", exp: "تكتب بلام واحدة في الاسم الموصول (التي)" },
+  اللذين: { fixed: "الذين", type: "typo", exp: "تكتب بلام واحدة لجمع المذكر (الذين)" },
+  اللة: { fixed: "الله", type: "typo", exp: "لفظ الجلالة ينتهي بهاء (الله)" },
+  شئ: { fixed: "شيء", type: "typo", exp: "الهمزة متطرفة على السطر بعد ياء ساكنة (شيء)" },
+  مسئول: { fixed: "مسؤول", type: "hamza", exp: "همزة مضمومة بعدها واو مد (مسؤول)" },
+  مسئولية: { fixed: "مسؤولية", type: "hamza", exp: "تكتب على واو (مسؤولية)" },
+  شئون: { fixed: "شؤون", type: "hamza", exp: "تكتب على واو (شؤون)" },
+  دفئ: { fixed: "دفء", type: "hamza", exp: "همزة متطرفة على السطر بعد ساكن (دفء)" },
+  بطئ: { fixed: "بطء", type: "hamza", exp: "همزة متطرفة على السطر بعد ساكن (بطء)" },
+  كفئ: { fixed: "كفء", type: "hamza", exp: "همزة متطرفة على السطر بعد ساكن (كفء)" },
+  خطء: { fixed: "خطأ", type: "hamza", exp: "همزة متطرفة على ألف (خطأ)" },
+  خطاء: { fixed: "خطأ", type: "hamza", exp: "تكتب على ألف (خطأ)" },
+  مبرووك: { fixed: "مبروك", type: "typo", exp: "تكتب بواو واحدة (مبروك)" },
+  مضهر: { fixed: "مظهر", type: "typo", exp: "تكتب بالظاء (مظهر)" },
+  ملاحضه: { fixed: "ملاحظة", type: "ta_marbuta", exp: "تكتب بالظاء والتاء المربوطة (ملاحظة)" },
+  ملاحظه: { fixed: "ملاحظة", type: "ta_marbuta", exp: "تنتهي بتاء مربوطة (ملاحظة)" },
+  حضا: { fixed: "حظاً", type: "typo", exp: "تكتب بالظاء والتنوين (حظاً)" },
+  ظغط: { fixed: "ضغط", type: "typo", exp: "تكتب بالضاد (ضغط)" },
+  إضهار: { fixed: "إظهار", type: "typo", exp: "تكتب بالظاء (إظهار)" },
+  اضهار: { fixed: "إظهار", type: "typo", exp: "همزة قطع وبالظاء (إظهار)" },
+};
+
+// ---------------------------------------------------------------------------
+// 3. Particles & Prepositions that MUST have Alif Maqsura (ى)
+// ---------------------------------------------------------------------------
+const ALIF_MAQSURA_WORDS: Record<string, string> = {
+  الي: "إلى",
+  إلي: "إلى",
+  علي: "على",
+  حتي: "حتى",
+  بلي: "بلى",
+  متي: "متى",
+  لدي: "لدى",
+  مستشفي: "مستشفى",
+  منتدي: "منتدى",
+  ملتقي: "ملتقى",
+  مقهي: "مقهى",
+  معني: "معنى",
+  مبني: "مبنى",
+  ماوي: "مأوى",
+  مأوي: "مأوى",
+  مرضي: "مرضى",
+  جرحي: "جرحى",
+  دعوي: "دعوى",
+  فتوي: "فتوى",
+  صغري: "صغرى",
+  كبري: "كبرى",
+  اخري: "أخرى",
+  أخري: "أخرى",
+  اولي: "أولى",
+  أولي: "أولى",
+  اقصي: "أقصى",
+  أقصي: "أقصى",
+  ادني: "أدنى",
+  أدني: "أدنى",
+  اعلي: "أعلى",
+  أعلي: "أعلى",
+  احلي: "أحلى",
+  أحلي: "أحلى",
+  ابهي: "أبهى",
+  أبهي: "أبهى",
+  اعمي: "أعمى",
+  أعمي: "أعمى",
+  اثري: "أثرى",
+  أثري: "أثرى",
+  اعفي: "أعفى",
+  اعطي: "أعطى",
+  القي: "ألقى",
+  انتهي: "انتهى",
+  اهتدي: "اهتدى",
+  ارتقي: "ارتقى",
+  اشتري: "اشترى",
+  استوي: "استوى",
+  استثني: "استثنى",
+  استولي: "استولى",
+  هدي: "هدى",
+  ندي: "ندى",
+  فتي: "فتى",
+  تقي: "تقى",
+  ضحي: "ضحى",
+  مني: "منى",
+  روي: "رؤى",
+  فدوي: "فدوى",
+  نجوي: "نجوى",
+  موسي: "موسى",
+  عيسي: "عيسى",
+  كسري: "كسرى",
+  بخاري: "بخارى",
+  عظمي: "عظمى",
+  بشري: "بشرى",
+  ذكري: "ذكرى",
+  فصحي: "فصحى",
+  سلوي: "سلوى",
+};
+
+// ---------------------------------------------------------------------------
+// 4. Ta Marbuta Rules & Lexicon
+// ---------------------------------------------------------------------------
+// Genuine Ha words (Must NOT be converted to Ta Marbuta)
+const GENUINE_HA_WORDS = new Set([
+  "مياه", "فواكه", "تشابه", "منبه", "توجيه", "تنبيه", "تسفيه", "تشويه", "وجه", "كره",
+  "شبه", "إله", "اله", "فقه", "سفيه", "عاه", "تيه", "شفاه", "جباه", "افواه", "أفواه",
+  "فقيه", "كريه", "نبيه", "نزيه", "شبيه", "وجيه", "تمويه", "تشبيه", "ترفيه", "نزه",
+  "منه", "عنه", "إليه", "اليه", "عليه", "فيه", "لديه", "به", "له", "دونه", "حوله"
+]);
+
+// Absolute Hamza Qat' words
+const HAMZA_QAT_WORDS: Record<string, string> = {
+  // Pronouns / Particles
+  الي: "إلى",
+  إلي: "إلى",
+  اذا: "إذا",
+  اذ: "إذ",
+  ان: "إن",
+  انما: "إنما",
+  او: "أو",
+  الا: "إلا",
+  اما: "أما",
+  ايضا: "أيضاً",
+  أيضا: "أيضاً",
+  ابد: "أبد",
+  ابدا: "أبداً",
+  أبدا: "أبداً",
+  اين: "أين",
+  اي: "أي",
+  اينما: "أينما",
+  اذن: "إذن",
+  انا: "أنا",
+  انت: "أنت",
+  انتم: "أنتم",
+  انتن: "أنتن",
+  انتما: "أنتما",
+  اياك: "إياك",
+
+  // Common Comparative (أفعل)
+  اكبر: "أكبر",
+  اصغر: "أصغر",
+  افضل: "أفضل",
+  احسن: "أحسن",
+  اكثر: "أكثر",
+  اقل: "أقل",
+  اعظم: "أعظم",
+  اسرع: "أسرع",
+  ابطا: "أبطأ",
+  ابطأ: "أبطأ",
+  اطول: "أطول",
+  اقصر: "أقصر",
+  احدث: "أحدث",
+  اقدم: "أقدم",
+  اسهل: "أسهل",
+  اصعب: "أصعب",
+  اقوي: "أقوى",
+  اقوى: "أقوى",
+  اضعف: "أضعف",
+  ادق: "أدق",
+  اعم: "أعم",
+  اخص: "أخص",
+  اجمل: "أجمل",
+  اكرم: "أكرم",
+  انبل: "أنبل",
+  اروع: "أروع",
+  اسمي: "أسمى",
+  اعلي: "أعلى",
+  ادني: "أدنى",
+  اقصي: "أقصى",
+  اولي: "أولى",
+  اصدق: "أصدق",
+  اوسع: "أوسع",
+  اشمل: "أشمل",
+
+  // Plural Patterns (أفعال)
+  اعمال: "أعمال",
+  اقوال: "أقوال",
+  افعال: "أفعال",
+  اوقات: "أوقات",
+  اهداف: "أهداف",
+  اسباب: "أسباب",
+  اسماء: "أسماء",
+  اشكال: "أشكال",
+  اموال: "أموال",
+  الوان: "ألوان",
+  اولاد: "أولاد",
+  اصحاب: "أصحاب",
+  اسرار: "أسرار",
+  ارقام: "أرقام",
+  اقلام: "أقلام",
+  احكام: "أحكام",
+  افكار: "أفكار",
+  اخبار: "أخبار",
+  ازهار: "أزهار",
+  اسواق: "أسواق",
+  ابواب: "أبواب",
+  اعباء: "أعباء",
+  انحاء: "أنحاء",
+  احياء: "أحياء",
+  اجزاء: "أجزاء",
+  اعضاء: "أعضاء",
+  انباء: "أنباء",
+  اراء: "آراء",
+
+  // Plural Patterns (أفعلة)
+  اجهزة: "أجهزة",
+  اسلحة: "أسلحة",
+  اطعمة: "أطعمة",
+  ادوية: "أدوية",
+  اقمشة: "أقمشة",
+  امثلة: "أمثلة",
+  السنة: "ألسنة",
+  اروقة: "أروقة",
+  امتعة: "أمتعة",
+  اغطية: "أغطية",
+  اوعية: "أوعية",
+  احذية: "أحذية",
+
+  // Quadrilateral Verbal Nouns (إفعال)
+  ارسال: "إرسال",
+  انتاج: "إنتاج",
+  انجاز: "إنجاز",
+  اشعار: "إشعار",
+  اطلاق: "إطلاق",
+  اصلاح: "إصلاح",
+  ادخال: "إدخال",
+  اخراج: "إخراج",
+  اتمام: "إتمام",
+  اعطاء: "إعطاء",
+  اعلان: "إعلان",
+  اعداد: "إعداد",
+  اعلام: "إعلام",
+  اضراب: "إضراب",
+  افادة: "إفادة",
+  اعادة: "إعادة",
+  اقامة: "إقامة",
+  اعانة: "إعانة",
+  اشارة: "إشارة",
+  ارادة: "إرادة",
+  ادارة: "إدارة",
+  اتاحة: "إتاحة",
+  ابداء: "إبداء",
+  الغاء: "إلغاء",
+  انهاء: "إنهاء",
+  اخفاء: "إخفاء",
+  ابراز: "إبراز",
+  اتقان: "إتقان",
+  احسان: "إحسان",
+  اكرام: "إكرام",
+  ايجاز: "إيجاز",
+  ايقاف: "إيقاف",
+  ايداع: "إيداع",
+  انشاء: "إنشاء",
+  اصدار: "إصدار",
+  ارفاق: "إرفاق",
+  ابداع: "إبداع",
+  ايجاد: "إيجاد",
+
+  // Names / Geographics
+  احمد: "أحمد",
+  ايمن: "أيمن",
+  امجد: "أمجد",
+  اسامة: "أسامة",
+  انس: "أنس",
+  ابراهيم: "إبراهيم",
+  اسماعيل: "إسماعيل",
+  اسحاق: "إسحاق",
+  ادريس: "إدريس",
+  الياس: "إلياس",
+  امين: "أمين",
+  اميرة: "أميرة",
+  ايمان: "إيمان",
+  الهام: "إلهام",
+  اسلام: "إسلام",
+  امل: "أمل",
+  انور: "أنور",
+  ادهم: "أدهم",
+  اشرف: "أشرف",
+  امير: "أمير",
+  اية: "آية",
+  الاء: "آلاء",
+  ايناس: "إيناس",
+  اياد: "إياد",
+  ايهاب: "إيهاب",
+  امريكا: "أمريكا",
+  اوروبا: "أوروبا",
+  المانيا: "ألمانيا",
+  ايطاليا: "إيطاليا",
+  اسبانيا: "إسبانيا",
+  انجلترا: "إنجلترا",
+  استراليا: "أستراليا",
+  اوكرانيا: "أوكرانيا",
+  انقرة: "أنقرة",
+  اسطنبول: "إسطنبول",
+  اثينا: "أثينا",
+  امستردام: "أمستردام",
+  اوسلو: "أوسلو",
+  الاردن: "الأردن",
+  الامارات: "الإمارات",
+  اندونيسيا: "إندونيسيا",
+  ايران: "إيران",
+};
+
+// Hamzat Wasl (Quin/Sextuple verbs & roots: must NOT have hamza)
+const HAMZA_WASL_ROOTS = [
+  "ستخدام", "ستخراج", "ستدعاء", "ستفسار", "ستمرار", "ستبدال", "ستعراض", "ستكمال",
+  "ستعلام", "ستقرار", "ستجابة", "ستلام", "ستماع", "ستثناء", "سترخاء", "ستقلال",
+  "ستهتار", "ستهلاك", "كتشاف", "ختبار", "ختيار", "ختصار", "جتماع", "عتذار",
+  "عتماد", "نتهاء", "بتداء", "شتراك", "نطلاق", "نخفاض", "نضمام", "نقسام",
+  "نتباه", "نتصار", "نتقال", "نتخاب", "نتظار", "عتراف", "متياز", "متحان",
+  "ستسلام", "بتسام", "حترام", "هتمام", "تساع", "تفاق", "تصال", "تحاد"
+];
+
+// Common English Misspellings Dictionary
 const ENGLISH_FIXES: Record<string, string> = {
   teh: "the",
   recieve: "receive",
   seperate: "separate",
   definately: "definitely",
+  definatly: "definitely",
   occured: "occurred",
   untill: "until",
-  wierd: "weird",
+  wich: "which",
+  goverment: "government",
+  beleive: "believe",
   alot: "a lot",
   dont: "don't",
   cant: "can't",
   wont: "won't",
-  shouldnt: "shouldn't",
-  couldnt: "couldn't",
-  wouldnt: "wouldn't",
+  didnt: "didn't",
   isnt: "isn't",
   arent: "aren't",
-  wasnt: "wasn't",
-  werent: "weren't",
-  hasnt: "hasn't",
   havent: "haven't",
-  hadnt: "hadn't",
+  wouldnt: "wouldn't",
+  couldnt: "couldn't",
+  shouldnt: "shouldn't",
+  im: "I'm",
+  youre: "you're",
+  theyre: "they're",
+  weve: "we've",
+  theres: "there's",
+  truely: "truly",
+  tommorow: "tomorrow",
+  tomorow: "tomorrow",
+  fourty: "forty",
+  wierd: "weird",
+  neccessary: "necessary",
+  necesary: "necessary",
+  succesful: "successful",
   accomodate: "accommodate",
-  acheive: "achieve",
-  accross: "across",
-  agressive: "aggressive",
-  apparantly: "apparently",
-  appearence: "appearance",
-  arguement: "argument",
-  beleive: "believe",
-  calender: "calendar",
-  colleague: "colleague",
-  comming: "coming",
   embarass: "embarrass",
   enviroment: "environment",
-  goverment: "government",
-  independant: "independent",
-  knowlege: "knowledge",
-  neccessary: "necessary",
+  pronounciation: "pronunciation",
+  recommand: "recommend",
+  begining: "beginning",
+  calender: "calendar",
+  collegue: "colleague",
+  privilege: "privilege",
+  existance: "existence",
+  mispell: "misspell",
   noticable: "noticeable",
-  persue: "pursue",
-  peice: "piece",
-  priviledge: "privilege",
+  posession: "possession",
   publically: "publicly",
-  realy: "really",
-  refered: "referred",
+  questionaire: "questionnaire",
+  refering: "referring",
+  suprise: "surprise",
+  thier: "their",
+  remeber: "remember",
+  greatful: "grateful",
+  garantee: "guarantee",
+  happend: "happened",
+  foriegn: "foreign",
+  arguement: "argument",
+  beleif: "belief",
+  acheive: "achieve",
+  concious: "conscious",
+  disapear: "disappear",
+  dissapear: "disappear",
+  grammer: "grammar",
+  millenium: "millennium",
+  occurence: "occurrence",
+  peice: "piece",
   religous: "religious",
-  rember: "remember",
-  succesful: "successful",
-  tommorow: "tomorrow",
-  truely: "truly",
-  unfortunatly: "unfortunately",
-  wich: "which",
+  rythm: "rhythm",
+  tendancy: "tendency",
+  threshhold: "threshold",
+  twelth: "twelfth",
+  vaccum: "vacuum",
+  weather: "whether",
 };
 
-// High-frequency prediction dictionary for mobile-style autocomplete
-const AR_PREDICTIONS: string[] = [
-  "السلام", "عليكم", "ورحمة", "الله", "وبركاته", "شكراً", "جزيلاً", "أهلاً", "وسهلاً",
-  "التطبيق", "الحافظة", "المستخدم", "البرنامج", "الرجاء", "التكرم", "التحديث", "التعديل",
-  "إضافة", "تعديل", "حفظ", "نسخ", "لصق", "استخراج", "النص", "الصورة", "كلمة", "المرور",
-  "البريد", "الإلكتروني", "الموقع", "الرابط", "الملف", "المستند", "التحميل", "التثبيت",
-  "مرحباً", "اليوم", "غداً", "أمس", "الآن", "دائماً", "حالياً", "أيضاً", "جداً", "فقط",
-  "مع", "على", "إلى", "عن", "من", "في", "هذا", "هذه", "ذلك", "تلك", "التي", "الذي",
-  "كيف", "لماذا", "متى", "أين", "كم", "هل", "نعم", "كلا", "حسناً", "بالتأكيد", "ممتاز",
-  "رائع", "جميل", "سريع", "دقيق", "احترافي", "جديد", "سابق", "تالي", "أول", "أخير"
+// ---------------------------------------------------------------------------
+// 5. Morphological Affix Processing (Arabic Prefixes)
+// ---------------------------------------------------------------------------
+const ARABIC_PREFIXES = [
+  "وبال", "فبال", "ولل", "فلل", "وال", "فال", "كال", "بال", "لل", "ال",
+  "وس", "فس", "و", "ف", "ب", "ل", "ك", "س"
 ];
 
-const EN_PREDICTIONS: string[] = [
-  "the", "be", "to", "of", "and", "a", "in", "that", "have", "I", "it", "for", "not",
-  "on", "with", "he", "as", "you", "do", "at", "this", "but", "his", "by", "from",
-  "they", "we", "say", "her", "she", "or", "an", "will", "my", "one", "all", "would",
-  "there", "their", "what", "so", "up", "out", "if", "about", "who", "get", "which",
-  "go", "me", "when", "make", "can", "like", "time", "no", "just", "him", "know",
-  "take", "people", "into", "year", "your", "good", "some", "could", "them", "see",
-  "other", "than", "then", "now", "look", "only", "come", "its", "over", "think",
-  "also", "back", "after", "use", "two", "how", "our", "work", "first", "well",
-  "way", "even", "new", "want", "because", "any", "these", "give", "day", "most",
-  "application", "clipboard", "password", "vault", "update", "release", "download"
-];
+function stripPrefix(word: string): { prefix: string; stem: string } {
+  for (const p of ARABIC_PREFIXES) {
+    if (word.startsWith(p) && word.length - p.length >= 2) {
+      return { prefix: p, stem: word.slice(p.length) };
+    }
+  }
+  return { prefix: "", stem: word };
+}
 
-/**
- * Check text and return detailed issues and corrected text.
- */
+// ---------------------------------------------------------------------------
+// 6. Main Spell Checker Function
+// ---------------------------------------------------------------------------
 export function checkSpelling(text: string): SpellCheckResult {
   if (!text || !text.trim()) {
-    return { original: text, corrected: text, issues: [], wordCount: 0, score: 100 };
+    return {
+      original: text,
+      corrected: text,
+      issues: [],
+      wordCount: 0,
+      score: 100,
+      categoriesCount: { hamza: 0, ta_marbuta: 0, alif_maqsura: 0, tanwin: 0, punctuation: 0, typo: 0 },
+    };
   }
 
   const issues: SpellIssue[] = [];
-  let corrected = text;
+  const categoriesCount = { hamza: 0, ta_marbuta: 0, alif_maqsura: 0, tanwin: 0, punctuation: 0, typo: 0 };
 
-  // 1. Run Arabic Regex Rules
-  for (const rule of ARABIC_FIXES) {
+  const addIssue = (
+    word: string,
+    start: number,
+    end: number,
+    suggestion: string,
+    type: SpellIssue["type"],
+    explanation: string
+  ) => {
+    issues.push({
+      id: `${type}-${start}-${word}`,
+      word,
+      start,
+      end,
+      suggestions: [suggestion],
+      type,
+      explanation,
+    });
+    if (categoriesCount[type as keyof typeof categoriesCount] !== undefined) {
+      categoriesCount[type as keyof typeof categoriesCount]++;
+    } else {
+      categoriesCount.typo++;
+    }
+  };
+
+  // Phase 1: Phrasal & Compound Checks
+  for (const phrase of PHRASAL_REPLACEMENTS) {
     let match: RegExpExecArray | null;
-    const re = new RegExp(rule.pattern.source, rule.pattern.flags);
-    while ((match = re.exec(text)) !== null) {
-      const originalWord = match[0];
-      const replacement = originalWord.replace(rule.pattern, rule.replace);
-      if (originalWord !== replacement) {
-        issues.push({
-          id: `ar-${match.index}-${originalWord}`,
-          word: originalWord,
-          start: match.index,
-          end: match.index + originalWord.length,
-          suggestions: [replacement],
-          type: rule.type,
-          explanation: rule.reason,
-        });
+    while ((match = phrase.regex.exec(text)) !== null) {
+      addIssue(match[0], match.index, match.index + match[0].length, phrase.replace, "typo", phrase.explanation);
+    }
+  }
+
+  // Phase 2: Waw Al-Atf Spacing (\bو\s+([ء-ي]+))
+  const wawRegex = /\b(و)\s+([\u0621-\u064A]+)/g;
+  let wawMatch: RegExpExecArray | null;
+  while ((wawMatch = wawRegex.exec(text)) !== null) {
+    const fullMatch = wawMatch[0];
+    const nextWord = wawMatch[2];
+    const fixed = `و${nextWord}`;
+    addIssue(fullMatch, wawMatch.index, wawMatch.index + fullMatch.length, fixed, "waw_spacing", "واو العطف تتصل بالمعطوف دون مسافة");
+  }
+
+  // Phase 3: Punctuation in Arabic context
+  const isArabic = /[\u0600-\u06FF]/.test(text);
+  if (isArabic) {
+    const punctRegex = /([،,\?؟;؛])/g;
+    let pMatch: RegExpExecArray | null;
+    while ((pMatch = punctRegex.exec(text)) !== null) {
+      const char = pMatch[0];
+      if (char === ",") {
+        addIssue(",", pMatch.index, pMatch.index + 1, "،", "punctuation", "الفاصلة العربية (،)");
+      } else if (char === "?") {
+        addIssue("?", pMatch.index, pMatch.index + 1, "؟", "punctuation", "علامة الاستفهام العربية (؟)");
+      } else if (char === ";") {
+        addIssue(";", pMatch.index, pMatch.index + 1, "؛", "punctuation", "الفاصلة المنقوطة العربية (؛)");
       }
     }
   }
 
-  // 2. Run English Words Fixes
+  // Phase 4: Tokenize Arabic words and apply deep morphological rules
+  const arWordRegex = /[\u0621-\u064A\u0671]+/g;
+  let arMatch: RegExpExecArray | null;
+
+  while ((arMatch = arWordRegex.exec(text)) !== null) {
+    const rawWord = arMatch[0];
+    const start = arMatch.index;
+    const end = start + rawWord.length;
+
+    // A) Exact Mappings (Tanwin, Typos, Demonstratives)
+    if (AR_EXACT_WORDS[rawWord]) {
+      const entry = AR_EXACT_WORDS[rawWord];
+      addIssue(rawWord, start, end, entry.fixed, entry.type, entry.exp);
+      continue;
+    }
+
+    // B) Alif Maqsura direct check
+    if (ALIF_MAQSURA_WORDS[rawWord]) {
+      addIssue(rawWord, start, end, ALIF_MAQSURA_WORDS[rawWord], "alif_maqsura", "ألف مقصورة (ى)");
+      continue;
+    }
+
+    // C) Hamzat Qat' direct check
+    if (HAMZA_QAT_WORDS[rawWord]) {
+      addIssue(rawWord, start, end, HAMZA_QAT_WORDS[rawWord], "hamza", "همزة قطع واجبة (أ / إ)");
+      continue;
+    }
+
+    // D) Hamzat Wasl (Quin/Sextuple roots)
+    let isWasl = false;
+    for (const waslRoot of HAMZA_WASL_ROOTS) {
+      if (rawWord.includes(`إ${waslRoot}`) || rawWord.includes(`أ${waslRoot}`)) {
+        const fixed = rawWord.replace(`إ${waslRoot}`, `ا${waslRoot}`).replace(`أ${waslRoot}`, `ا${waslRoot}`);
+        addIssue(rawWord, start, end, fixed, "hamza", "همزة وصل تُكتب ألفاً قائمة دون همزة (ا)");
+        isWasl = true;
+        break;
+      }
+    }
+    if (isWasl) continue;
+
+    // E) Morphological Affix Stripping Analysis
+    const { prefix, stem } = stripPrefix(rawWord);
+    if (prefix && stem.length >= 2) {
+      if (AR_EXACT_WORDS[stem]) {
+        const entry = AR_EXACT_WORDS[stem];
+        addIssue(rawWord, start, end, `${prefix}${entry.fixed}`, entry.type, entry.exp);
+        continue;
+      }
+      if (ALIF_MAQSURA_WORDS[stem]) {
+        addIssue(rawWord, start, end, `${prefix}${ALIF_MAQSURA_WORDS[stem]}`, "alif_maqsura", "ألف مقصورة (ى)");
+        continue;
+      }
+      if (HAMZA_QAT_WORDS[stem]) {
+        addIssue(rawWord, start, end, `${prefix}${HAMZA_QAT_WORDS[stem]}`, "hamza", "همزة قطع بعد السابقة");
+        continue;
+      }
+      // Check prefix + Alif Wasl check
+      if (prefix === "ال" || prefix === "وال" || prefix === "فال" || prefix === "بال") {
+        if (stem.startsWith("إ") || stem.startsWith("أ")) {
+          const stemWithoutHamza = stem.slice(1);
+          for (const waslRoot of HAMZA_WASL_ROOTS) {
+            if (stemWithoutHamza.startsWith(waslRoot.slice(1))) {
+              const fixed = `${prefix}ا${stemWithoutHamza}`;
+              addIssue(rawWord, start, end, fixed, "hamza", "همزة وصل في الخماسي/السداسي بعد ال التعريف");
+              isWasl = true;
+              break;
+            }
+          }
+          if (isWasl) continue;
+        }
+      }
+    }
+
+    // F) Heuristic Ta Marbuta (ة) vs Ha (ه)
+    if (rawWord.endsWith("ه") && !GENUINE_HA_WORDS.has(rawWord)) {
+      const stemCheck = prefix ? stem : rawWord;
+      // Heuristic 1: Ends with 'يه' (e.g. تقنيه، شخصيه، ذكيه، اهميه، امنيه، علميه، عمليه، مسؤوليه)
+      if (stemCheck.endsWith("يه") && stemCheck.length >= 3 && !GENUINE_HA_WORDS.has(stemCheck)) {
+        const fixed = rawWord.slice(0, -1) + "ة";
+        addIssue(rawWord, start, end, fixed, "ta_marbuta", "ياء النسبة والأسماء المؤنثة تنتهي بتاء مربوطة (ـية)");
+        continue;
+      }
+      // Heuristic 2: Ends with 'اه' preceded by letters that form feminine nouns (حياه، قناه، صلاه، زكاه، فتاه، نجاه، وفاه، مباراه، معاناه، مكافاه)
+      if (stemCheck.endsWith("اه") && stemCheck.length >= 3 && !GENUINE_HA_WORDS.has(stemCheck)) {
+        const fixed = rawWord.slice(0, -1) + "ة";
+        addIssue(rawWord, start, end, fixed, "ta_marbuta", "اسم مؤنث ينتهي بألف وتاء مربوطة (ـاة)");
+        continue;
+      }
+      // Heuristic 3: Common feminine patterns (فَعيلة: جميله، جديده، كبيره، صغيره / فاعلة: كامله، شامله / مفعولة: معلومه)
+      if (stemCheck.length >= 4 && !GENUINE_HA_WORDS.has(stemCheck)) {
+        // Words like: جديده, جميله, قديمه, سريعه, بطيئه, نظيفه, عظيمه, مفيده, طبيعيه, رئيسيه, واضحه, سابقه, لاحقه
+        const fixed = rawWord.slice(0, -1) + "ة";
+        addIssue(rawWord, start, end, fixed, "ta_marbuta", "اسم أو صفة مؤنثة تنتهي بتاء مربوطة (ة)");
+        continue;
+      }
+    }
+
+    // G) Double Alif Tanwin error (e.g. مساءاً -> مساءً، رجاءاً -> رجاءً)
+    if (rawWord.endsWith("اءاً") || rawWord.endsWith("اءا")) {
+      const fixed = rawWord.replace(/اءاً?$/, "اءً");
+      addIssue(rawWord, start, end, fixed, "tanwin", "الهمزة المتطرفة بعد ألف لا تلحقها ألف تنوين (ـاءً)");
+      continue;
+    }
+  }
+
+  // Phase 5: Tokenize English words
   const enWordRegex = /\b[a-zA-Z']+\b/g;
   let enMatch: RegExpExecArray | null;
   while ((enMatch = enWordRegex.exec(text)) !== null) {
@@ -210,26 +711,28 @@ export function checkSpelling(text: string): SpellCheckResult {
           ? ENGLISH_FIXES[lower].charAt(0).toUpperCase() + ENGLISH_FIXES[lower].slice(1)
           : ENGLISH_FIXES[lower];
 
-      issues.push({
-        id: `en-${enMatch.index}-${rawWord}`,
-        word: rawWord,
-        start: enMatch.index,
-        end: enMatch.index + rawWord.length,
-        suggestions: [suggestion],
-        type: "typo",
-        explanation: `تصحيح إملائي مقترح: "${suggestion}"`,
-      });
+      addIssue(
+        rawWord,
+        enMatch.index,
+        enMatch.index + rawWord.length,
+        suggestion,
+        "typo",
+        `تصحيح إملائي إنجليزي: "${suggestion}"`
+      );
     }
   }
 
-  // 3. Build corrected text by applying unique non-overlapping fixes
-  // Sort issues in descending order by start index so replacements don't offset subsequent indices
+  // Phase 6: Apply non-overlapping fixes in descending start order
   const sortedIssues = [...issues].sort((a, b) => b.start - a.start);
-  const seenIndices = new Set<number>();
+  let corrected = text;
+  const seenIntervals: Array<[number, number]> = [];
 
   for (const issue of sortedIssues) {
-    if (!seenIndices.has(issue.start) && issue.suggestions.length > 0) {
-      seenIndices.add(issue.start);
+    const overlaps = seenIntervals.some(
+      ([s, e]) => Math.max(s, issue.start) < Math.min(e, issue.end)
+    );
+    if (!overlaps && issue.suggestions.length > 0) {
+      seenIntervals.push([issue.start, issue.end]);
       corrected =
         corrected.slice(0, issue.start) +
         issue.suggestions[0] +
@@ -240,7 +743,7 @@ export function checkSpelling(text: string): SpellCheckResult {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const wordCount = words.length;
   const errorRate = wordCount > 0 ? issues.length / wordCount : 0;
-  const score = Math.max(0, Math.min(100, Math.round((1 - errorRate * 1.5) * 100)));
+  const score = Math.max(0, Math.min(100, Math.round((1 - errorRate * 1.2) * 100)));
 
   return {
     original: text,
@@ -248,23 +751,38 @@ export function checkSpelling(text: string): SpellCheckResult {
     issues,
     wordCount,
     score,
+    categoriesCount,
   };
 }
 
-/**
- * Predict next words or complete current word (Mobile keyboard style).
- */
-export function predictWords(input: string, limit = 5): string[] {
-  if (!input) return ["السلام", "شكراً", "أهلاً", "Hello", "Thanks"];
+// ---------------------------------------------------------------------------
+// 7. Mobile-style Word Prediction Engine
+// ---------------------------------------------------------------------------
+const AR_PREDICTIONS = [
+  "السلام", "عليكم", "ورحمة", "الله", "وبركاته", "شكراً", "جزيلاً", "أهلاً", "وسهلاً",
+  "التطبيق", "الحافظة", "المستخدم", "الكلمات", "المرور", "النظام", "اليوم", "العمل",
+  "النسخ", "اللصق", "التدقيق", "اللغوي", "التقرير", "الملفات", "الصور", "الروابط", "الإعدادات",
+  "تفضيل", "مرحبا", "تحياتي", "بالتأكيد", "ممتاز", "رائع", "جديد", "سريع", "آمن"
+];
+
+const EN_PREDICTIONS = [
+  "the", "be", "to", "of", "and", "a", "in", "that", "have", "I",
+  "it", "for", "not", "on", "with", "he", "as", "you", "do", "at",
+  "this", "but", "his", "by", "from", "they", "we", "say", "her", "she",
+  "or", "an", "will", "my", "one", "all", "would", "there", "their", "what",
+  "hello", "thanks", "welcome", "clipboard", "vault", "password", "smart", "quick"
+];
+
+export function predictWords(input: string, limit = 6): string[] {
+  if (!input) return ["السلام", "شكراً", "أهلاً", "Hello", "Thanks", "Welcome"];
 
   const words = input.trimEnd().split(/\s+/);
   const currentWord = words[words.length - 1]?.trim().toLowerCase() || "";
 
   if (!currentWord) {
-    // Return most frequent starting words
     return /[\u0600-\u06FF]/.test(input)
-      ? ["عليكم", "جزيلاً", "وسهلاً", "التطبيق", "اليوم"]
-      : ["you", "the", "this", "with", "for"];
+      ? ["عليكم", "جزيلاً", "وسهلاً", "التطبيق", "اليوم", "الآن"]
+      : ["you", "the", "this", "with", "for", "here"];
   }
 
   const isArabic = /[\u0600-\u06FF]/.test(currentWord);

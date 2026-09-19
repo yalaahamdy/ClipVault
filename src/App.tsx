@@ -577,6 +577,13 @@ export default function App() {
             >
               <Icon name={settings?.theme === "light" ? "sun" : "moon"} size={14} />
             </button>
+            <button
+              className={`top-control-btn settings-toggle${view === "settings" ? " active" : ""}`}
+              title="الإعدادات (Ctrl+5)"
+              onClick={() => setView((v) => (v === "settings" ? "home" : "settings"))}
+            >
+              <Icon name="settings" size={14} />
+            </button>
           </div>
         </div>
 

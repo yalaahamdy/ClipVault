@@ -9,6 +9,7 @@ interface SmartTypingSuiteProps {
 }
 
 type SubTab = "layout" | "spellcheck" | "voice";
+type IssueFilter = "all" | "hamza" | "ta_marbuta" | "tanwin" | "punctuation" | "typo";
 
 export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) => {
   const [activeTab, setActiveTab] = useState<SubTab>("layout");
@@ -20,22 +21,24 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
   const [targetLang, setTargetLang] = useState<"ar" | "en">("ar");
   const [isAutoDetect, setIsAutoDetect] = useState(true);
   const [isFixingSelection, setIsFixingSelection] = useState(false);
-
-  // Mobile predictions
   const [predictions, setPredictions] = useState<string[]>([]);
 
   // ---------------- State: Spell Checker ----------------
   const [spellInput, setSpellInput] = useState("");
   const [spellResult, setSpellResult] = useState<SpellCheckResult | null>(null);
+  const [selectedIssueFilter, setSelectedIssueFilter] = useState<IssueFilter>("all");
 
-  // ---------------- State: Voice Typing ----------------
+  // ---------------- State: Voice & Audio Studio ----------------
   const [isListening, setIsListening] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [voiceLang, setVoiceLang] = useState<"ar-SA" | "ar-EG" | "en-US">("ar-SA");
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const timerIntervalRef = useRef<any>(null);
 
-  // ---------------- Layout Inversion ----------------
+  // ---------------- Layout Inversion Logic ----------------
   useEffect(() => {
     if (!inputText) {
       setConvertedText("");
@@ -73,6 +76,37 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     setTargetLang(newTarget);
     setSourceLang(newTarget === "ar" ? "en" : "ar");
   }, [targetLang]);
+
+  const handlePasteFromClipboard = useCallback(async (setter: (val: string) => void, actionName: string) => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setter(text);
+        onNotify(`تم لصق النص من الحافظة (${text.length} حرف)`);
+      } else {
+        onNotify("الحافظة فارغة أو لا تحتوي على نص", true);
+      }
+    } catch {
+      onNotify("تعذر القراءة من الحافظة تلقائياً", true);
+    }
+  }, [onNotify]);
+
+  const handlePasteAndInvert = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) {
+        onNotify("الحافظة فارغة", true);
+        return;
+      }
+      setInputText(text);
+      const { converted } = convertKeyboardLayout(text);
+      setConvertedText(converted);
+      await navigator.clipboard.writeText(converted);
+      onNotify("تم اللصق وعكس اللغة ونسخ النتيجة تلقائياً!");
+    } catch {
+      onNotify("تعذر قراءة الحافظة", true);
+    }
+  }, [onNotify]);
 
   const handleCopy = useCallback(async (textToCopy: string, label = "تم النسخ") => {
     if (!textToCopy) return;
@@ -134,6 +168,31 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     onNotify(`تم تصحيح كافة الأخطاء (${spellResult.issues.length} خطأ)!`);
   }, [spellResult, handleCheckSpelling, onNotify]);
 
+  // Text-To-Speech function
+  const handleSpeakText = useCallback((textToSpeak: string, lang = "ar-SA") => {
+    if (!("speechSynthesis" in window)) {
+      onNotify("النطق الصوتي غير مدعوم في متصفحك الحالي", true);
+      return;
+    }
+    if (isPlayingAudio) {
+      window.speechSynthesis.cancel();
+      setIsPlayingAudio(false);
+      return;
+    }
+    if (!textToSpeak.trim()) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = lang;
+    utterance.rate = 0.95;
+
+    utterance.onstart = () => setIsPlayingAudio(true);
+    utterance.onend = () => setIsPlayingAudio(false);
+    utterance.onerror = () => setIsPlayingAudio(false);
+
+    window.speechSynthesis.speak(utterance);
+  }, [isPlayingAudio, onNotify]);
+
   // ---------------- Voice Typing Logic ----------------
   useEffect(() => {
     const SpeechRecognition =
@@ -169,17 +228,20 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
         onNotify(`تنبيه الإملاء الصوتي: ${event.error}`, true);
       }
       setIsListening(false);
+      clearInterval(timerIntervalRef.current);
     };
 
     recognizer.onend = () => {
       setIsListening(false);
       setInterimTranscript("");
+      clearInterval(timerIntervalRef.current);
     };
 
     recognitionRef.current = recognizer;
 
     return () => {
       try { recognizer.abort(); } catch { /* silent */ }
+      clearInterval(timerIntervalRef.current);
     };
   }, [voiceLang, onNotify]);
 
@@ -192,42 +254,64 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     if (isListening) {
       try { recognitionRef.current.stop(); } catch { /* silent */ }
       setIsListening(false);
+      clearInterval(timerIntervalRef.current);
     } else {
       try {
         recognitionRef.current.lang = voiceLang;
         recognitionRef.current.start();
         setIsListening(true);
+        setRecordingSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+          setRecordingSeconds((prev) => prev + 1);
+        }, 1000);
         onNotify("جارٍ الاستماع... تحدث بوضوح عبر الميكروفون.");
       } catch (err) {
         onNotify("تعذر تشغيل الميكروفون. يرجى التحقق من أذونات الصوت.", true);
         setIsListening(false);
+        clearInterval(timerIntervalRef.current);
       }
     }
   }, [isListening, voiceLang, onNotify]);
 
-  // ---------------- In-component Keyboard Shortcuts ----------------
+  // Format seconds to mm:ss
+  const formatTimer = (sec: number) => {
+    const mins = Math.floor(sec / 60);
+    const secs = sec % 60;
+    return `${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
+  // Filtered issues list
+  const filteredIssues = spellResult
+    ? spellResult.issues.filter((issue) => {
+        if (selectedIssueFilter === "all") return true;
+        if (selectedIssueFilter === "hamza") return issue.type === "hamza";
+        if (selectedIssueFilter === "ta_marbuta") return issue.type === "ta_marbuta";
+        if (selectedIssueFilter === "tanwin") return issue.type === "tanwin";
+        if (selectedIssueFilter === "punctuation") return issue.type === "punctuation" || issue.type === "waw_spacing";
+        if (selectedIssueFilter === "typo") return issue.type === "typo";
+        return true;
+      })
+    : [];
+
+  // Keyboard Shortcuts handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Alt+1, Alt+2, Alt+3 for tab switching
       if (e.altKey && e.key === "1") { e.preventDefault(); setActiveTab("layout"); return; }
       if (e.altKey && e.key === "2") { e.preventDefault(); setActiveTab("spellcheck"); return; }
       if (e.altKey && e.key === "3") { e.preventDefault(); setActiveTab("voice"); return; }
 
-      // Alt+S: Swap languages in layout tab
       if (e.altKey && (e.key.toLowerCase() === "s")) {
         e.preventDefault();
         handleSwapLangs();
         return;
       }
 
-      // Ctrl+Shift+X: Trigger selection fix
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "x") {
         e.preventDefault();
         handleFixSelectedTextSystemWide();
         return;
       }
 
-      // Ctrl+Enter or Shift+Enter inside layout tab
       if (activeTab === "layout") {
         if (e.shiftKey && e.key === "Enter") {
           e.preventDefault();
@@ -241,7 +325,6 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
         }
       }
 
-      // Ctrl+Enter inside spellcheck tab
       if (activeTab === "spellcheck") {
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
           e.preventDefault();
@@ -255,7 +338,6 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
         }
       }
 
-      // Ctrl+M inside voice tab: toggle mic
       if (activeTab === "voice") {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "m") {
           e.preventDefault();
@@ -288,7 +370,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
 
   return (
     <div className="mobile-typing-suite animate-fade-in">
-      {/* 1. Compact Header Bar (Mobile-friendly) */}
+      {/* 1. Header Bar */}
       <header className="mobile-typing-topbar">
         <div className="typing-header-brand">
           <div className="typing-sparkle-ico">
@@ -304,7 +386,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
           className={`btn-quick-fix-selection ${isFixingSelection ? "loading" : ""}`}
           onClick={handleFixSelectedTextSystemWide}
           disabled={isFixingSelection}
-          title="تصحيح النص المحدد في أي تطبيق نشط واستبداله فوراً (Ctrl+Shift+X)"
+          title="تصحيح النص المحدد في أي تطبيق واستبداله فوراً (Ctrl+Shift+X)"
         >
           <Icon name="sparkles" size={12} />
           <span>تصحيح التحديد</span>
@@ -312,12 +394,12 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
         </button>
       </header>
 
-      {/* 2. Sub-Tab Segment Control */}
+      {/* 2. Sub-Tab Segment Navigation */}
       <nav className="mobile-segment-tabs" role="tablist" aria-label="أقسام الكتابة الذكية">
         <button
           className={`segment-btn ${activeTab === "layout" ? "active" : ""}`}
           onClick={() => setActiveTab("layout")}
-          title="عكس لغة المفاتيح (Alt+1)"
+          title="عكس لغة لوحة المفاتيح (Alt+1)"
         >
           <Icon name="globe" size={13} />
           <span>عكس اللغة</span>
@@ -326,7 +408,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
         <button
           className={`segment-btn ${activeTab === "spellcheck" ? "active" : ""}`}
           onClick={() => setActiveTab("spellcheck")}
-          title="المدقق الإملائي (Alt+2)"
+          title="التدقيق اللغوي والإملائي (Alt+2)"
         >
           <Icon name="check" size={13} />
           <span>المدقق الإملائي</span>
@@ -338,15 +420,15 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
         <button
           className={`segment-btn ${activeTab === "voice" ? "active" : ""}`}
           onClick={() => setActiveTab("voice")}
-          title="الكتابة بالصوت (Alt+3)"
+          title="استوديو الإملاء الصوتي (Alt+3)"
         >
           <Icon name="microphone" size={13} />
           <span>الإملاء الصوتي</span>
-          {isListening && <span className="tab-pill-counter live">نشط</span>}
+          {isListening && <span className="tab-pill-counter live">نشط {formatTimer(recordingSeconds)}</span>}
         </button>
       </nav>
 
-      {/* 3. TAB 1: KEYBOARD LAYOUT INVERTER (Vertical Mobile Flow) */}
+      {/* 3. TAB 1: KEYBOARD LAYOUT INVERTER */}
       {activeTab === "layout" && (
         <section className="mobile-tab-scroll-body">
           {/* Prediction Bar */}
@@ -381,15 +463,25 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                   </span>
                 )}
               </div>
-              {inputText && (
+              <div className="panel-actions-row">
                 <button
-                  className="mini-icon-btn"
-                  onClick={() => setInputText("")}
-                  title="مسح الحقل"
+                  className="mini-action-pill"
+                  onClick={() => handlePasteFromClipboard(setInputText, "حقل الإدخال")}
+                  title="لصق من الحافظة"
                 >
-                  <Icon name="trash" size={12} />
+                  <Icon name="clipboard" size={11} />
+                  <span>لصق</span>
                 </button>
-              )}
+                {inputText && (
+                  <button
+                    className="mini-icon-btn"
+                    onClick={() => setInputText("")}
+                    title="مسح الحقل"
+                  >
+                    <Icon name="trash" size={12} />
+                  </button>
+                )}
+              </div>
             </div>
 
             <textarea
@@ -417,6 +509,18 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Quick Paste & Invert Button Strip */}
+          <div className="quick-paste-strip">
+            <button
+              className="btn-quick-paste-invert"
+              onClick={handlePasteAndInvert}
+              title="قراءة الحافظة وعكس لغتها وحفظ النتيجة فوراً بضغطة واحدة"
+            >
+              <Icon name="refresh" size={13} />
+              <span>⚡ لصق وعكس فوري من الحافظة</span>
+            </button>
           </div>
 
           {/* Action Divider Strip */}
@@ -491,7 +595,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
         </section>
       )}
 
-      {/* 4. TAB 2: PRO SPELL CHECKER (Vertical Stack for Popups) */}
+      {/* 4. TAB 2: PRO SPELL CHECKER */}
       {activeTab === "spellcheck" && (
         <section className="mobile-tab-scroll-body">
           {/* Editor Card */}
@@ -502,9 +606,17 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                 <span>محرر التدقيق اللغوي</span>
               </div>
               <div className="panel-actions-row">
+                <button
+                  className="mini-action-pill"
+                  onClick={() => handlePasteFromClipboard(handleCheckSpelling, "محرر التدقيق")}
+                  title="لصق نص من الحافظة وتدقيقه"
+                >
+                  <Icon name="clipboard" size={11} />
+                  <span>لصق وتدقيق</span>
+                </button>
                 {spellResult && spellResult.issues.length > 0 && (
                   <button
-                    className="pill-action-btn magic"
+                    className="pill-action-btn magic pulse-btn"
                     onClick={handleFixAllSpelling}
                     title="تصحيح كافة الأخطاء المكتشفة بنقرة واحدة (Ctrl+Enter)"
                   >
@@ -526,7 +638,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
 
             <textarea
               className="mobile-smart-textarea spell-text"
-              placeholder="الصق أو اكتب النص هنا لتدقيقه... مثلاً: 'شكرن جزيلن تم إستدعاء احمد حتي نصل الي حل جدن ممتز'"
+              placeholder="الصق أو اكتب النص لتدقيقه... مثلاً: 'شكرن جزيلن تم إستدعاء احمد حتي نصل الي حل جدن ممتز'"
               value={spellInput}
               onChange={(e) => handleCheckSpelling(e.target.value)}
               dir="auto"
@@ -534,11 +646,19 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
 
             <div className="panel-bar-bottom">
               <div className="spell-counts">
-                <span>الكلمات: {spellResult?.wordCount || 0}</span>
-                <span>الملاحظات: {spellResult?.issues.length || 0}</span>
+                <span>الكلمات: <b>{spellResult?.wordCount || 0}</b></span>
+                <span>الملاحظات: <b className={spellResult && spellResult.issues.length > 0 ? "warn-text" : ""}>{spellResult?.issues.length || 0}</b></span>
               </div>
               {spellInput && (
                 <div className="panel-actions-row">
+                  <button
+                    className="pill-action-btn"
+                    onClick={() => handleSpeakText(spellInput)}
+                    title="الاستماع إلى نطق النص"
+                  >
+                    <Icon name={isPlayingAudio ? "pause" : "volume-2"} size={11} />
+                    <span>{isPlayingAudio ? "إيقاف" : "نطق"}</span>
+                  </button>
                   <button
                     className="pill-action-btn"
                     onClick={() => handleCopy(spellInput, "تم نسخ النص المصحح")}
@@ -558,7 +678,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
             </div>
           </div>
 
-          {/* Results and Issues Card */}
+          {/* Results and Issues Card with Interactive Filter Badges */}
           <div className="mobile-card-panel issues-panel">
             <div className="panel-bar-top">
               <div className="panel-title-group">
@@ -577,20 +697,76 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                         : "var(--danger)",
                   }}
                 >
-                  دقة النص: {spellResult.score}%
+                  سلامة النص: {spellResult.score}%
                 </div>
               )}
             </div>
+
+            {/* Category Filter Chips */}
+            {spellResult && spellResult.issues.length > 0 && (
+              <div className="issue-filter-chips">
+                <button
+                  className={`filter-chip ${selectedIssueFilter === "all" ? "active" : ""}`}
+                  onClick={() => setSelectedIssueFilter("all")}
+                >
+                  الكل ({spellResult.issues.length})
+                </button>
+                {spellResult.categoriesCount.hamza > 0 && (
+                  <button
+                    className={`filter-chip ${selectedIssueFilter === "hamza" ? "active" : ""}`}
+                    onClick={() => setSelectedIssueFilter("hamza")}
+                  >
+                    الهمزات ({spellResult.categoriesCount.hamza})
+                  </button>
+                )}
+                {spellResult.categoriesCount.ta_marbuta > 0 && (
+                  <button
+                    className={`filter-chip ${selectedIssueFilter === "ta_marbuta" ? "active" : ""}`}
+                    onClick={() => setSelectedIssueFilter("ta_marbuta")}
+                  >
+                    التاء المربوطة ({spellResult.categoriesCount.ta_marbuta})
+                  </button>
+                )}
+                {spellResult.categoriesCount.tanwin > 0 && (
+                  <button
+                    className={`filter-chip ${selectedIssueFilter === "tanwin" ? "active" : ""}`}
+                    onClick={() => setSelectedIssueFilter("tanwin")}
+                  >
+                    التنوين ({spellResult.categoriesCount.tanwin})
+                  </button>
+                )}
+                {spellResult.categoriesCount.punctuation > 0 && (
+                  <button
+                    className={`filter-chip ${selectedIssueFilter === "punctuation" ? "active" : ""}`}
+                    onClick={() => setSelectedIssueFilter("punctuation")}
+                  >
+                    الترقيم ({spellResult.categoriesCount.punctuation})
+                  </button>
+                )}
+                {spellResult.categoriesCount.typo > 0 && (
+                  <button
+                    className={`filter-chip ${selectedIssueFilter === "typo" ? "active" : ""}`}
+                    onClick={() => setSelectedIssueFilter("typo")}
+                  >
+                    أخطاء شائعة ({spellResult.categoriesCount.typo})
+                  </button>
+                )}
+              </div>
+            )}
 
             {spellResult ? (
               <div className="mobile-issues-list">
                 {spellResult.issues.length === 0 ? (
                   <div className="compact-clean-msg">
                     <Icon name="check-circle" size={24} />
-                    <span>النص سليم وخالٍ من الأخطاء الإملائية المكتشفة!</span>
+                    <span>النص سليم وخالٍ تماماً من الأخطاء الإملائية المكتشفة!</span>
+                  </div>
+                ) : filteredIssues.length === 0 ? (
+                  <div className="compact-empty-msg">
+                    <span>لا توجد أخطاء في هذا التصنيف المحدد.</span>
                   </div>
                 ) : (
-                  spellResult.issues.map((issue) => (
+                  filteredIssues.map((issue) => (
                     <div key={issue.id} className="mobile-issue-row">
                       <div className="issue-details">
                         <span className="bad-word">{issue.word}</span>
@@ -603,7 +779,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                               onClick={() => handleApplySingleFix(issue, sug)}
                               title="انقر لتطبيق هذا التصحيح في النص"
                             >
-                              {sug}
+                              <span>{sug}</span>
                               <Icon name="check" size={10} />
                             </button>
                           ))}
@@ -616,14 +792,14 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
               </div>
             ) : (
               <div className="compact-empty-msg">
-                <span>اكتب أو الصق نصاً في المحرر أعلاه لبدء الفحص التلقائي.</span>
+                <span>اكتب أو الصق نصاً في المحرر أعلاه لبدء الفحص التلقائي الفوري.</span>
               </div>
             )}
           </div>
         </section>
       )}
 
-      {/* 5. TAB 3: VOICE-TO-TEXT STUDIO (Mobile Mic Style) */}
+      {/* 5. TAB 3: VOICE-TO-TEXT STUDIO */}
       {activeTab === "voice" && (
         <section className="mobile-tab-scroll-body">
           <div className="mobile-card-panel voice-card">
@@ -649,18 +825,31 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
 
             {/* Centered Floating Mic Button with Pulsing Waves */}
             <div className="mobile-mic-center">
-              <button
-                className={`mobile-big-mic ${isListening ? "active-listening" : ""}`}
-                onClick={toggleVoiceListening}
-                title={isListening ? "إيقاف الاستماع (Ctrl+M)" : "بدء التسجيل الصوتي (Ctrl+M)"}
-              >
-                <Icon name={isListening ? "pause" : "microphone"} size={26} />
-              </button>
-              <span className="mic-hint-label">
-                {isListening
-                  ? "الميكروفون نشط — تحدث بوضوح الآن..."
-                  : "انقر على الميكروفون لبدء الإملاء (Ctrl+M)"}
-              </span>
+              <div className={`mic-ring-halo ${isListening ? "pulsing" : ""}`}>
+                <button
+                  className={`mobile-big-mic ${isListening ? "active-listening" : ""}`}
+                  onClick={toggleVoiceListening}
+                  title={isListening ? "إيقاف الاستماع (Ctrl+M)" : "بدء التسجيل الصوتي (Ctrl+M)"}
+                >
+                  <Icon name={isListening ? "pause" : "microphone"} size={26} />
+                </button>
+              </div>
+              <div className="mic-status-container">
+                <span className="mic-hint-label">
+                  {isListening
+                    ? `جارٍ الاستماع... (${formatTimer(recordingSeconds)})`
+                    : "انقر على الميكروفون لبدء الإملاء (Ctrl+M)"}
+                </span>
+                {isListening && (
+                  <div className="audio-bars-sim">
+                    <span className="bar b1" />
+                    <span className="bar b2" />
+                    <span className="bar b3" />
+                    <span className="bar b4" />
+                    <span className="bar b5" />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Transcript Area */}
@@ -676,7 +865,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                 <span className="interim-transcript">{interimTranscript}</span>
               ) : (
                 <span className="transcript-placeholder">
-                  سيظهر كلامك المفرغ هنا فور نطقك به بدقة فائقة...
+                  تحدث عبر الميكروفون وسيتم تفريغ كلامك هنا بدقة متناهية...
                 </span>
               )}
             </div>
@@ -694,6 +883,14 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                   </button>
                   <div className="panel-actions-row">
                     <button
+                      className="pill-action-btn"
+                      onClick={() => handleSpeakText(voiceTranscript, voiceLang)}
+                      title="الاستماع إلى نطق النص"
+                    >
+                      <Icon name={isPlayingAudio ? "pause" : "volume-2"} size={11} />
+                      <span>{isPlayingAudio ? "إيقاف" : "نطق"}</span>
+                    </button>
+                    <button
                       className="pill-action-btn primary"
                       onClick={() => handleCopy(voiceTranscript, "تم نسخ النص المفرغ")}
                     >
@@ -710,22 +907,11 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                     <button
                       className="pill-action-btn"
                       onClick={() => {
-                        setInputText(voiceTranscript);
-                        setActiveTab("layout");
-                      }}
-                      title="عكس لغة النص"
-                    >
-                      <Icon name="refresh" size={11} />
-                      <span>عكس</span>
-                    </button>
-                    <button
-                      className="pill-action-btn"
-                      onClick={() => {
                         setSpellInput(voiceTranscript);
                         handleCheckSpelling(voiceTranscript);
                         setActiveTab("spellcheck");
                       }}
-                      title="تدقيق إملائي"
+                      title="تدقيق النص المفرغ إملائياً"
                     >
                       <Icon name="check" size={11} />
                       <span>تدقيق</span>
@@ -733,7 +919,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
                   </div>
                 </>
               ) : (
-                <span className="empty-hint">اضغط الميكروفون أو Ctrl+M للتحدث</span>
+                <span className="empty-hint">اضغط الميكروفون أو اختصار Ctrl+M للتحدث</span>
               )}
             </div>
           </div>
@@ -743,10 +929,10 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
       {/* 6. Mobile Shortcuts Quick Footer */}
       <footer className="mobile-shortcuts-footer">
         <div className="shortcut-chip-item">
-          <kbd>Ctrl+Shift+X</kbd> <span>تصحيح التحديد في أي برنامج</span>
+          <kbd>Ctrl+Shift+X</kbd> <span>تصحيح التحديد</span>
         </div>
         <div className="shortcut-chip-item">
-          <kbd>Ctrl+↵</kbd> <span>نسخ / تطبيق الكل</span>
+          <kbd>Ctrl+↵</kbd> <span>نسخ / تصحيح الكل</span>
         </div>
         <div className="shortcut-chip-item">
           <kbd>Shift+↵</kbd> <span>لصق بالتطبيق</span>

@@ -1,37 +1,38 @@
 import { Icon } from "../icons";
+import { useT } from "../i18n";
 
 export function EmptyFirstRun({ shortcut }: { shortcut: string }) {
+  const t = useT();
   return (
     <div className="empty">
       <div className="empty-ico"><Icon name="clipboard" size={30} strokeWidth={1.4} /></div>
-      <h3>أهلًا بك في ClipVault</h3>
-      <p>
-        انسخ أي نص أو صورة أو ملف كما تفعل دائمًا، وسيظهر هنا فورًا.
-        لا حاجة لترتيب أي شيء — ابحث فقط عند الحاجة.
-      </p>
+      <h3>{t("empty.firstTitle")}</h3>
+      <p>{t("empty.firstBody")}</p>
       <div className="kbd-chip">
-        اضغط <kbd>{shortcut}</kbd> في أي وقت لإظهار هذه النافذة أو إخفائها
+        {t("empty.firstKbd", { shortcut })}
       </div>
     </div>
   );
 }
 
 export function EmptyResults() {
+  const t = useT();
   return (
     <div className="empty">
       <div className="empty-ico"><Icon name="search" size={28} strokeWidth={1.4} /></div>
-      <h3>لا توجد نتائج مطابقة</h3>
-      <p>جرّب كلمة أقصر أو غيّر التصفية أعلى القائمة.</p>
+      <h3>{t("empty.resultsTitle")}</h3>
+      <p>{t("empty.resultsBody")}</p>
     </div>
   );
 }
 
 export function EmptyFiltered() {
+  const t = useT();
   return (
     <div className="empty">
       <div className="empty-ico"><Icon name="folder" size={28} strokeWidth={1.4} /></div>
-      <h3>لا يوجد شيء في هذا التصنيف بعد</h3>
-      <p>ستظهر العناصر هنا تلقائيًا أثناء نسخ المحتوى من أي تطبيق.</p>
+      <h3>{t("empty.filteredTitle")}</h3>
+      <p>{t("empty.filteredBody")}</p>
     </div>
   );
 }

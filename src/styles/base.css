@@ -716,3 +716,22 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ==========================================================================
+   v1.5 — English (LTR) typography + direction-aware helpers
+   ========================================================================== */
+
+html[lang="en"] {
+  --font: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, -apple-system, "Helvetica Neue", sans-serif;
+}
+
+/* Mirror the settings back-button (chevron) in LTR mode */
+html[dir="ltr"] .settings-head .icon-btn > svg {
+  transform: scaleX(-1);
+}
+
+/* The selection overlay must always be LTR — coordinates are screen-space */
+.snip-overlay,
+.snip-overlay * {
+  direction: ltr;
+}

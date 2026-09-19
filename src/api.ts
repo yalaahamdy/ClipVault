@@ -5,6 +5,9 @@ import type {
   ItemsPage,
   OcrResult,
   Settings,
+  SnipCommitResult,
+  SnipFrame,
+  SnipRect,
   SortOption,
   SourceAppStat,
   Stats,
@@ -176,6 +179,40 @@ export const api = {
 
   extractOcrFile(path: string): Promise<OcrResult> {
     return call<OcrResult>("ocr_extract_file", { path });
+  },
+
+  // ---- v1.5: screenshot → OCR -------------------------------------------------
+
+  /** Capture the monitor under the cursor and open the region-selection overlay. */
+  snipBegin(): Promise<void> {
+    return call<void>("snip_begin");
+  },
+
+  /** Frozen frame shown as the overlay background. */
+  snipGetFrame(): Promise<SnipFrame> {
+    return call<SnipFrame>("snip_get_frame");
+  },
+
+  /** Crop the frozen frame (CSS px + device pixel ratio), store it, run OCR, copy it. */
+  snipCommit(rect: SnipRect): Promise<SnipCommitResult> {
+    return call<SnipCommitResult>("snip_commit", { rect });
+  },
+
+  /** Cancel the pending snip session. */
+  snipCancel(): Promise<void> {
+    return call<void>("snip_cancel");
+  },
+
+  // ---- v1.5: transforms / QR / merge ------------------------------------------
+
+  /** Generate a QR code PNG data URL for the given text. */
+  qrGenerate(text: string): Promise<string> {
+    return call<string>("qr_generate", { text });
+  },
+
+  /** Store a new text item (transform result / merged text) and copy it to the clipboard. */
+  addTextItem(text: string, source?: string): Promise<Item> {
+    return call<Item>("add_text_item", { text, source: source ?? null });
   },
 };
 

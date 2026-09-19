@@ -2687,3 +2687,114 @@
   font-size: var(--fs-xs);
   color: var(--text-3);
 }
+
+/* ==========================================================================
+   v1.5 — Multi-select (selection bar, card checkboxes, launchpad snip card)
+   ========================================================================== */
+
+.card.selectable-mode {
+  cursor: pointer;
+}
+.card.checked {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+.card-check {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  box-shadow: var(--shadow-btn);
+  animation: popIn 140ms ease;
+}
+@keyframes popIn {
+  from { transform: scale(0.5); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.selection-bar {
+  position: fixed;
+  bottom: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 5px;
+  gap: 6px;
+  max-width: calc(100vw - 16px);
+  padding: 7px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  z-index: 60;
+  white-space: nowrap;
+}
+.sel-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--accent);
+  padding-inline: 4px;
+}
+.sel-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-1);
+}
+.sel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border-1);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.sel-btn:hover:not(:disabled) {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sel-btn.danger:hover:not(:disabled) {
+  background: var(--danger-soft, rgba(239, 68, 68, 0.12));
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.sel-btn.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-3);
+}
+.sel-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.sel-spacer { width: 4px; }
+
+/* Launchpad: snip card accent */
+.launchpad-card.snip .card-accent-bar {
+  background: linear-gradient(90deg, #f97316, #fbbf24);
+}
+.launchpad-card.snip .card-icon-wrap.snip {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), rgba(251, 191, 36, 0.18));
+  color: #f97316;
+}

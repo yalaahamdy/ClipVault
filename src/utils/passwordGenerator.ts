@@ -53,18 +53,19 @@ export function generatePassphrase(wordCount = 4, separator = "-"): string {
   return selectedWords.join(separator);
 }
 
-export function getStrengthFeedback(score: number): { label: string; color: string; percent: number } {
+/** Strength label keys (resolved via i18n at render time — see vault dict). */
+export function getStrengthFeedback(score: number): { labelKey: string; color: string; percent: number } {
   switch (score) {
     case 0:
-      return { label: "ضعيفة جداً", color: "var(--danger)", percent: 20 };
+      return { labelKey: "vault.strength.veryWeak", color: "var(--danger)", percent: 20 };
     case 1:
-      return { label: "ضعيفة", color: "var(--warn)", percent: 40 };
+      return { labelKey: "vault.strength.weak", color: "var(--warn)", percent: 40 };
     case 2:
-      return { label: "متوسطة", color: "var(--pin)", percent: 60 };
+      return { labelKey: "vault.strength.medium", color: "var(--pin)", percent: 60 };
     case 3:
-      return { label: "قوية", color: "var(--ok)", percent: 80 };
+      return { labelKey: "vault.strength.strong", color: "var(--ok)", percent: 80 };
     case 4:
     default:
-      return { label: "خارقة الأمان", color: "var(--accent)", percent: 100 };
+      return { labelKey: "vault.strength.super", color: "var(--accent)", percent: 100 };
   }
 }

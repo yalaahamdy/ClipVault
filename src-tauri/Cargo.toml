@@ -1,6 +1,6 @@
 [package]
 name = "clipvault"
-version = "1.4.0"
+version = "1.5.0"
 description = "ClipVault — fast & elegant clipboard manager for Windows"
 authors = ["ClipVault"]
 edition = "2021"
@@ -28,6 +28,7 @@ base64 = "0.22"
 aes-gcm = "0.10"
 rand = "0.8"
 image = { version = "0.25", default-features = false, features = ["png", "bmp"] }
+qrcode = { version = "0.14", default-features = false, features = ["image"] }
 
 [target.'cfg(windows)'.dependencies]
 clipboard-win = "5"

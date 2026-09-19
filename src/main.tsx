@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import "./styles/base.css";
 import "./styles/components.css";
@@ -7,6 +8,8 @@ import "./styles/overlays.css";
 import "../public/fonts/fonts.css";
 
 import App from "./App";
+import { SnipOverlay } from "./components/SnipOverlay";
+import { I18nProvider } from "./i18n";
 
 // Prevent the native browser context menu — ClipVault draws its own
 document.addEventListener("contextmenu", (e) => {
@@ -16,9 +19,29 @@ document.addEventListener("contextmenu", (e) => {
 });
 
 function start() {
-  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  // The snip window renders only the region-selection overlay — no app shell.
+  let isSnipWindow = false;
+  try {
+    isSnipWindow = getCurrentWindow().label === "snip";
+  } catch { /* browser preview → main */ }
+
+  const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
+  if (isSnipWindow) {
+    root.render(
+      <React.StrictMode>
+        <I18nProvider>
+          <SnipOverlay />
+        </I18nProvider>
+      </React.StrictMode>,
+    );
+    return;
+  }
+
+  root.render(
     <React.StrictMode>
-      <App />
+      <I18nProvider>
+        <App />
+      </I18nProvider>
     </React.StrictMode>,
   );
 }

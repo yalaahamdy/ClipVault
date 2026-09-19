@@ -48,6 +48,55 @@ function svgImage(label: string, c1: string, c2: string): string {
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
 }
 
+/** Fake desktop screenshot for the dev snip overlay. */
+function fakeScreenshot(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#1e293b"/><stop offset="1" stop-color="#0b1220"/>
+  </linearGradient></defs>
+  <rect width="1280" height="800" fill="url(#bg)"/>
+  <rect x="60" y="60" width="560" height="340" rx="12" fill="#f8fafc"/>
+  <text x="90" y="130" font-family="Segoe UI, sans-serif" font-size="30" font-weight="700" fill="#0f172a">تقرير المبيعات — الربع الثالث</text>
+  <text x="90" y="180" font-family="Segoe UI, sans-serif" font-size="22" fill="#334155">إجمالي الإيرادات: 1,240,500 جنيه</text>
+  <text x="90" y="220" font-family="Segoe UI, sans-serif" font-size="22" fill="#334155">نسبة النمو: 18.4%</text>
+  <text x="90" y="260" font-family="Segoe UI, sans-serif" font-size="22" fill="#334155"> Quarterly growth is steady.</text>
+  <rect x="680" y="60" width="540" height="480" rx="12" fill="#0ea5e9" opacity="0.9"/>
+  <circle cx="1180" cy="700" r="150" fill="rgba(255,255,255,0.08)"/>
+  <text x="640" y="720" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="26" fill="#64748b">Snap — dev preview frame</text>
+</svg>`;
+  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+}
+
+/** Deterministic pseudo-QR grid (visual placeholder for browser QA). */
+function qrDataUrl(text: string): string {
+  const size = 25;
+  let seed = 0;
+  for (let i = 0; i < text.length; i++) seed = (seed * 31 + text.charCodeAt(i)) >>> 0;
+  const rand = () => {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    return (seed >>> 16) % 2 === 0;
+  };
+  let cells = "";
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const finder =
+        (x < 7 && y < 7) || (x >= size - 7 && y < 7) || (x < 7 && y >= size - 7);
+      const on = finder
+        ? (x % (size - 7) === 0 || y % (size - 7) === 0 ||
+           (x % (size - 7) === 6 || y % (size - 7) === 6) ||
+           (x >= 2 && x <= 4 && y >= 2 && y <= 4) ||
+           (x >= size - 5 && x <= size - 3 && y >= 2 && y <= 4) ||
+           (x >= 2 && x <= 4 && y >= size - 5 && y <= size - 3))
+        : rand();
+      if (on) {
+        cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+      }
+    }
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><g fill="#0b0e13">${cells}</g></svg>`;
+  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+}
+
 interface MockItem {
   id: number;
   kind: "text" | "link" | "image" | "files";
@@ -143,6 +192,7 @@ const settings: Record<string, string> = {
   firstRun: "0",
   autostart: "0",
   paused: "0",
+  lang: "ar",
 };
 
 const stats = { total: 1248, pinned: 6, favorites: 14, texts: 980, images: 92, links: 140, files: 36 };
@@ -282,6 +332,69 @@ const handlers: Record<string, CmdHandler> = {
   typing_fix_selected_text: () => "تم تصحيح النص",
   typing_inject_text: () => {},
   typing_get_selected_text: () => "",
+  // v1.5: snip / transforms / QR (browser-simulated)
+  snip_begin: () => {
+    // In the browser the overlay is rendered inside the main window by App's
+    // dev-mode path; the frame is fetched via snip_get_frame below.
+  },
+  snip_get_frame: () => ({
+    dataUrl: fakeScreenshot(),
+    width: 1280,
+    height: 800,
+    monitorX: 0,
+    monitorY: 0,
+  }),
+  snip_commit: (a) => {
+    const rect = (a?.rect ?? {}) as Record<string, number>;
+    const w = Math.max(60, Math.round((rect.w ?? 320) * (rect.dpr ?? 1)));
+    const h = Math.max(40, Math.round((rect.h ?? 200) * (rect.dpr ?? 1)));
+    const item: MockItem = {
+      id: ++itemIdSeq,
+      kind: "image",
+      text: null,
+      html: null,
+      files: null,
+      image: true,
+      imageData: svgImage(`${w}×${h}`, "#0f766e", "#22d3ee"),
+      sourceApp: "ClipVault ✂",
+      ocrText: ocrSample.text,
+      pinned: false,
+      favorite: false,
+      sensitive: false,
+      createdAt: Date.now(),
+      lastUsedAt: Date.now(),
+      useCount: 1,
+      tags: [],
+    };
+    items.unshift(item);
+    itemsById.set(item.id, item);
+    return { id: item.id, hasOcrText: true, ocrText: ocrSample.text };
+  },
+  snip_cancel: () => {},
+  qr_generate: (a) => qrDataUrl(String(a?.text ?? "")),
+  add_text_item: (a) => {
+    const text = String(a?.text ?? "").trim();
+    const item: MockItem = {
+      id: ++itemIdSeq,
+      kind: "text",
+      text,
+      html: null,
+      files: null,
+      image: false,
+      sourceApp: String(a?.source ?? "ClipVault ✦"),
+      ocrText: null,
+      pinned: false,
+      favorite: false,
+      sensitive: false,
+      createdAt: Date.now(),
+      lastUsedAt: Date.now(),
+      useCount: 1,
+      tags: [],
+    };
+    items.unshift(item);
+    itemsById.set(item.id, item);
+    return item;
+  },
   // vault
   vault_get_status: () => ({ isSetup: true, isLocked: !vaultUnlocked, autoLockMinutes: 15, totalItems: vaultItems.length }),
   vault_setup_master: () => { vaultUnlocked = true; return { isSetup: true, isLocked: false, autoLockMinutes: 15, totalItems: vaultItems.length }; },
@@ -376,4 +489,7 @@ export function installBrowserMock(): void {
     },
     plugins: {},
   };
+
+  // Marker for App's dev-only snip overlay path.
+  (w as { __CV_DEV_MOCK__?: boolean }).__CV_DEV_MOCK__ = true;
 }

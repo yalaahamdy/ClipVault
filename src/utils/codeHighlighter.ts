@@ -248,39 +248,43 @@ export function highlightCode(code: string, lang: SupportedLang): string {
   }
 
   // 3. General Programming Languages (JS, TS, Python, Rust, SQL, CSS, Shell)
+  // Single combined pass: comments → strings → numbers → keywords → fn-calls.
+  // (Sequential passes used to re-match their own injected markup — e.g. the
+  // `class` inside <span class="…"> — corrupting the output.)
   let escaped = escapeHtml(code);
 
-  // Strings
-  escaped = escaped.replace(
-    /(["'`])(?:(?=(\\?))\2.)*?\1/g,
-    '<span class="tok-string">$&</span>'
-  );
-
-  // Comments
-  escaped = escaped.replace(
-    /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*)/g,
-    '<span class="tok-comment">$1</span>'
-  );
-
-  // Numbers (hex, float, int)
-  escaped = escaped.replace(/\b(0x[0-9a-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g, '<span class="tok-number">$1</span>');
-
-  // Keywords
-  const keywords =
+  const KEYWORDS =
     lang === "sql"
-      ? /\b(SELECT|FROM|WHERE|INSERT|INTO|UPDATE|DELETE|JOIN|LEFT|RIGHT|INNER|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|AS|ON|AND|OR|NOT|IN|EXISTS|CREATE|TABLE|DROP|ALTER|PRIMARY|KEY|CASCADE|SET|VALUES)\b/gi
+      ? "SELECT|FROM|WHERE|INSERT|INTO|UPDATE|DELETE|JOIN|LEFT|RIGHT|INNER|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|AS|ON|AND|OR|NOT|IN|EXISTS|CREATE|TABLE|DROP|ALTER|PRIMARY|KEY|CASCADE|SET|VALUES"
       : lang === "python"
-      ? /\b(def|class|if|elif|else|while|for|in|return|import|from|as|try|except|finally|with|pass|break|continue|lambda|yield|async|await|None|True|False|is|not)\b/g
+      ? "def|class|if|elif|else|while|for|in|return|import|from|as|try|except|finally|with|pass|break|continue|lambda|yield|async|await|None|True|False|is|not"
       : lang === "rust"
-      ? /\b(fn|let|mut|pub|struct|enum|impl|trait|use|mod|match|if|else|loop|while|for|in|return|async|await|const|type|where|self|Self|true|false|ref|move)\b/g
+      ? "fn|let|mut|pub|struct|enum|impl|trait|use|mod|match|if|else|loop|while|for|in|return|async|await|const|type|where|self|Self|true|false|ref|move"
       : lang === "css"
-      ? /\b(important|px|rem|em|vh|vw|calc|var|rgba?|hsl|none|auto|inherit|solid|flex|grid|block|inline|absolute|relative|fixed)\b/g
-      : /\b(function|const|let|var|class|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|async|await|import|export|from|default|extends|implements|interface|type|public|private|protected|static|true|false|null|undefined|typeof|instanceof)\b/g;
+      ? "important|px|rem|em|vh|vw|calc|var|rgba|hsl|none|auto|inherit|solid|flex|grid|block|inline|absolute|relative|fixed"
+      : "function|const|let|var|class|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|async|await|import|export|from|default|extends|implements|interface|type|public|private|protected|static|true|false|null|undefined|typeof|instanceof";
 
-  escaped = escaped.replace(keywords, '<span class="tok-keyword">$&</span>');
+  const combined = new RegExp(
+    [
+      "(\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/|#[^\\n]*)", // 1: comment
+      "([\"'`])(?:(?=(\\\\?))\\2.)*?\\1", // 2: string (opening quote captured)
+      "\\b(0x[0-9a-fA-F]+|\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b", // 3: number
+      "\\b(" + KEYWORDS + ")\\b", // 4: keyword
+      "\\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\\s*\\()", // 5: function call
+    ].join("|"),
+    "g" + (lang === "sql" ? "i" : ""),
+  );
 
-  // Function invocations: foo(...)
-  escaped = escaped.replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(?=\()/g, '<span class="tok-fn">$1</span>');
+  escaped = escaped.replace(
+    combined,
+    (match, comment: string | undefined, quote: string | undefined, num: string | undefined, kw: string | undefined) => {
+      if (comment) return `<span class="tok-comment">${comment}</span>`;
+      if (quote) return `<span class="tok-string">${match}</span>`;
+      if (num) return `<span class="tok-number">${num}</span>`;
+      if (kw) return `<span class="tok-keyword">${kw}</span>`;
+      return `<span class="tok-fn">${match}</span>`;
+    },
+  );
 
   return escaped;
 }

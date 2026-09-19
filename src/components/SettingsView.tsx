@@ -3,6 +3,7 @@ import type { Settings } from "../types";
 import { api } from "../api";
 import { APP_VERSION } from "../version";
 import { Icon } from "../icons";
+import { useI18n } from "../i18n";
 
 interface Props {
   settings: Settings;
@@ -34,6 +35,7 @@ function comboFromEvent(e: KeyboardEvent): string | null {
 export function SettingsView({
   settings, paused, onSettingsChange, onPausedChange, onClose, onClearHistory, notify,
 }: Props) {
+  const { t, lang } = useI18n();
   const [listening, setListening] = useState(false);
   const [newApp, setNewApp] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
@@ -45,8 +47,8 @@ export function SettingsView({
 
   useEffect(() => {
     if (!confirmClear) return;
-    const t = setTimeout(() => setConfirmClear(false), 3000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setConfirmClear(false), 3000);
+    return () => clearTimeout(timer);
   }, [confirmClear]);
 
   // global shortcut recorder
@@ -61,9 +63,9 @@ export function SettingsView({
       if (combo === settings.globalShortcut) return;
       try {
         await onSettingsChange({ globalShortcut: combo });
-        notify(`تم تعيين الاختصار: ${combo}`);
-      } catch (err) {
-        notify(`تعذر تسجيل الاختصار: قد يكون محجوزًا`, true);
+        notify(t("settings.shortcutSet", { combo }));
+      } catch {
+        notify(t("settings.shortcutFail"), true);
       }
     };
     document.addEventListener("keydown", onKey, true);
@@ -85,52 +87,75 @@ export function SettingsView({
     if (!name) return;
     if (!name.endsWith(".exe")) name += ".exe";
     if (excluded.includes(name)) { setNewApp(""); return; }
-    patch({ excludedApps: JSON.stringify([...excluded, name]) }, `لن يتم تسجيل المحتوى المنسوخ من ${name}`);
+    patch({ excludedApps: JSON.stringify([...excluded, name]) }, t("settings.excludedNote", { app: name }));
     setNewApp("");
   };
 
   const retentionLabel = (v: string) =>
-    v === "0" ? "غير محدود" : v === "7" ? "أسبوع" : v === "30" ? "30 يومًا" : "90 يومًا";
+    v === "0" ? t("settings.retentionUnlimited")
+    : v === "7" ? t("settings.retentionWeek")
+    : v === "30" ? t("settings.retention30")
+    : t("settings.retention90");
 
   return (
     <div className="settings-view">
       <div className="settings-head">
-        <button className="icon-btn" onClick={onClose} title="رجوع (Esc)">
+        <button className="icon-btn" onClick={onClose} title={t("settings.backTitle")}>
           <Icon name="chevronRight" size={16} />
         </button>
-        <h3><Icon name="settings" size={15} /> الإعدادات</h3>
+        <h3><Icon name="settings" size={15} /> {t("settings.title")}</h3>
       </div>
 
       <div className="settings-body">
         {/* ---------- general ---------- */}
         <div className="settings-group">
-          <h4>عام</h4>
+          <h4>{t("settings.general")}</h4>
           <div className="setting-row">
             <div className="s-label">
-              <div className="s-title">تشغيل مع Windows</div>
-              <div className="s-desc">يبدأ ClipVault في الخلفية مع بدء التشغيل</div>
+              <div className="s-title">{t("settings.autostartTitle")}</div>
+              <div className="s-desc">{t("settings.autostartDesc")}</div>
             </div>
             <button
               className={`switch${settings.autostart === "1" ? " on" : ""}`}
               onClick={() => patch({ autostart: settings.autostart === "1" ? "0" : "1" })}
-              aria-label="تشغيل مع Windows"
+              aria-label={t("settings.autostartTitle")}
             />
           </div>
           <div className="setting-row">
-            <div className="s-label"><div className="s-title">المظهر</div></div>
+            <div className="s-label"><div className="s-title">{t("settings.themeTitle")}</div></div>
             <div className="segmented">
               <button className={settings.theme !== "light" ? "on" : ""} onClick={() => patch({ theme: "dark" })}>
-                داكن
+                {t("settings.dark")}
               </button>
               <button className={settings.theme === "light" ? "on" : ""} onClick={() => patch({ theme: "light" })}>
-                فاتح
+                {t("settings.light")}
               </button>
             </div>
           </div>
           <div className="setting-row">
             <div className="s-label">
-              <div className="s-title">اختصار فتح الحافظة</div>
-              <div className="s-desc">يعمل من أي مكان في النظام</div>
+              <div className="s-title">{t("settings.languageTitle")}</div>
+              <div className="s-desc">{t("settings.languageDesc")}</div>
+            </div>
+            <div className="segmented">
+              <button
+                className={lang === "ar" ? "on" : ""}
+                onClick={() => patch({ lang: "ar" })}
+              >
+                {t("settings.langAr")}
+              </button>
+              <button
+                className={lang === "en" ? "on" : ""}
+                onClick={() => patch({ lang: "en" })}
+              >
+                {t("settings.langEn")}
+              </button>
+            </div>
+          </div>
+          <div className="setting-row">
+            <div className="s-label">
+              <div className="s-title">{t("settings.shortcutTitle")}</div>
+              <div className="s-desc">{t("settings.shortcutDesc")}</div>
             </div>
             <div ref={listenRef} className="shortcut-box">
               <div
@@ -139,47 +164,47 @@ export function SettingsView({
                 onClick={() => setListening(true)}
                 role="button"
               >
-                {listening ? "اضغط التركيبة الآن…" : settings.globalShortcut}
+                {listening ? t("settings.recording") : settings.globalShortcut}
               </div>
             </div>
           </div>
           <div className="setting-row">
-            <div className="s-label"><div className="s-title">دليل الاختصارات</div></div>
+            <div className="s-label"><div className="s-title">{t("settings.keysGuide")}</div></div>
             <button className="btn" onClick={() => { onClose(); dispatchHelp(); }}>
-              <Icon name="keyboard" size={13} /> عرض
+              <Icon name="keyboard" size={13} /> {t("settings.show")}
             </button>
           </div>
         </div>
 
         {/* ---------- privacy ---------- */}
         <div className="settings-group">
-          <h4>الخصوصية</h4>
+          <h4>{t("settings.privacy")}</h4>
           <div className="setting-row">
             <div className="s-label">
-              <div className="s-title">إيقاف تسجيل الحافظة مؤقتًا</div>
-              <div className="s-desc">لن يُسجَّل أي محتوى جديد حتى الاستئناف</div>
+              <div className="s-title">{t("settings.pauseTitle")}</div>
+              <div className="s-desc">{t("settings.pauseDesc")}</div>
             </div>
             <button
               className={`switch${paused ? " on warn" : ""}`}
               onClick={() => onPausedChange(!paused)}
-              aria-label="إيقاف التسجيل"
+              aria-label={t("settings.pauseAria")}
             />
           </div>
           <div className="setting-row">
             <div className="s-label">
-              <div className="s-title">تمويه المحتوى الحساس</div>
-              <div className="s-desc">إخفاء العناصر المميزة كحساسة حتى الضغط عليها</div>
+              <div className="s-title">{t("settings.maskTitle")}</div>
+              <div className="s-desc">{t("settings.maskDesc")}</div>
             </div>
             <button
               className={`switch${settings.autoMask !== "0" ? " on" : ""}`}
               onClick={() => patch({ autoMask: settings.autoMask === "0" ? "1" : "0" })}
-              aria-label="تمويه المحتوى الحساس"
+              aria-label={t("settings.maskAria")}
             />
           </div>
           <div className="setting-row stack">
             <div className="s-label">
-              <div className="s-title">تطبيقات مستثناة من التسجيل</div>
-              <div className="s-desc">مثال: مدير كلمات المرور — اكتب اسم العملية (keepass.exe)</div>
+              <div className="s-title">{t("settings.excludedTitle")}</div>
+              <div className="s-desc">{t("settings.excludedDesc")}</div>
             </div>
             <div className="add-app-row">
               <input
@@ -197,7 +222,7 @@ export function SettingsView({
                   <span className="app-chip" key={a}>
                     {a}
                     <button
-                      title="إزالة"
+                      title={t("settings.remove")}
                       onClick={() =>
                         patch({ excludedApps: JSON.stringify(excluded.filter((x) => x !== a)) })
                       }
@@ -213,11 +238,11 @@ export function SettingsView({
 
         {/* ---------- storage ---------- */}
         <div className="settings-group">
-          <h4>التخزين</h4>
+          <h4>{t("settings.storage")}</h4>
           <div className="setting-row">
             <div className="s-label">
-              <div className="s-title">مدة الاحتفاظ بالعناصر</div>
-              <div className="s-desc">المثبّت والمفضل لا يُحذفان أبدًا</div>
+              <div className="s-title">{t("settings.retentionTitle")}</div>
+              <div className="s-desc">{t("settings.retentionDesc")}</div>
             </div>
             <select
               className="select"
@@ -231,8 +256,8 @@ export function SettingsView({
           </div>
           <div className="setting-row">
             <div className="s-label">
-              <div className="s-title">الحد الأقصى لعدد العناصر</div>
-              <div className="s-desc">يحافظ على سرعة البحث مع آلاف العناصر</div>
+              <div className="s-title">{t("settings.maxTitle")}</div>
+              <div className="s-desc">{t("settings.maxDesc")}</div>
             </div>
             <select
               className="select"
@@ -246,8 +271,8 @@ export function SettingsView({
           </div>
           <div className="setting-row">
             <div className="s-label">
-              <div className="s-title">حذف السجل</div>
-              <div className="s-desc">حذف كل العناصر ما عدا المثبّت والمفضل</div>
+              <div className="s-title">{t("settings.clearTitle")}</div>
+              <div className="s-desc">{t("settings.clearDesc")}</div>
             </div>
             <button
               className="btn danger"
@@ -258,23 +283,23 @@ export function SettingsView({
               }}
             >
               <Icon name="trash" size={13} />
-              {confirmClear ? "متأكد؟ اضغط للتأكيد" : "حذف كل السجل"}
+              {confirmClear ? t("settings.confirmClear") : t("settings.clearBtn")}
             </button>
           </div>
         </div>
 
         {/* ---------- about ---------- */}
         <div className="settings-group">
-          <h4>حول</h4>
+          <h4>{t("settings.about")}</h4>
           <div className="setting-row center">
             <div className="about-box">
               <div className="logo-line">
                 <img src="/icon.png" alt="ClipVault" className="about-logo-img" />
                 ClipVault
               </div>
-              <div>الإصدار {APP_VERSION} — يعمل محليًا بنسبة 100%</div>
+              <div>{t("settings.versionLine", { v: APP_VERSION })}</div>
               <div className="about-privacy">
-                لا يرسل بياناتك إلى الإنترنت — كل شيء يبقى على جهازك
+                {t("settings.privacyNote")}
               </div>
             </div>
           </div>

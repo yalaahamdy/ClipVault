@@ -320,6 +320,7 @@ pub fn get_settings(app: AppHandle, state: State<crate::AppState>) -> Result<Has
         "autoMask",
         "firstRun",
         "paused",
+        "lang",
     ] {
         map.insert(key.to_string(), db.get_setting(key).unwrap_or_default());
     }
@@ -1148,3 +1149,74 @@ pub fn typing_get_selected_text() -> Result<String, String> {
 
 
 
+
+// ---------------------------------------------------------------- v1.5: transform results / merged items / QR
+
+/// Store a new text item produced inside ClipVault (transform result, merged
+/// multi-select content, …), copy it to the system clipboard, and broadcast it.
+#[tauri::command]
+pub fn add_text_item(
+    app: AppHandle,
+    state: State<crate::AppState>,
+    text: String,
+    source: Option<String>,
+) -> Result<crate::models::Item, String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("لا يمكن حفظ نص فارغ".into());
+    }
+
+    // Copy to the clipboard so the item is immediately pasteable.
+    let content = WriteContent {
+        kind: "text",
+        text: Some(trimmed),
+        html: None,
+        files: None,
+        png: None,
+    };
+    clipboard_io::write_to_clipboard(&content)?;
+
+    // Same hash scheme as the clipboard monitor.
+    let hash = {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(b"text");
+        h.update([0x1f]);
+        h.update(trimmed.as_bytes());
+        h.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()
+    };
+
+    let now = now_ms();
+    let id = {
+        let db = state.lock_db();
+        match db.find_by_hash(&hash) {
+            Some(existing) => {
+                let _ = db.touch_item(existing, now);
+                existing
+            }
+            None => db.insert_item(
+                "text",
+                Some(trimmed),
+                None,
+                None,
+                false,
+                source.as_deref().or(Some("ClipVault")),
+                &hash,
+                now,
+            )?,
+        }
+    };
+
+    let item = {
+        let db = state.lock_db();
+        db.get_item(id)?.ok_or_else(|| "ITEM_MISSING".to_string())?
+    };
+    let _ = app.emit("clipvault:new-item", &item);
+    Ok(item)
+}
+
+/// Generate a QR code (PNG data URL) for arbitrary text or a URL.
+#[tauri::command]
+pub fn qr_generate(text: String) -> Result<String, String> {
+    crate::qr::png_data_url(&text)
+}

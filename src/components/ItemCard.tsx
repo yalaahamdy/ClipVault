@@ -12,6 +12,7 @@ import {
   sourceLabel,
 } from "../utils";
 import { isHtml, isJson, isMarkdown } from "../utils/codeHighlighter";
+import { useI18n } from "../i18n";
 
 const thumbCache = new Map<number, string>();
 
@@ -24,19 +25,29 @@ export interface CardActionEvt {
 
 export function ItemCard({
   item,
+  index,
   selected,
   animate,
   query,
+  selectMode = false,
+  checked = false,
   onAction,
   onSelect,
+  onToggleSelect,
 }: {
   item: Item;
+  index?: number;
   selected: boolean;
   animate: boolean;
   query: string;
+  /** v1.5 multi-select */
+  selectMode?: boolean;
+  checked?: boolean;
   onAction: (e: CardActionEvt) => void;
   onSelect?: () => void;
+  onToggleSelect?: (mode: "toggle" | "range") => void;
 }) {
+  const { t, lang } = useI18n();
   const [thumb, setThumb] = useState<string | null>(() => thumbCache.get(item.id) ?? null);
   const [thumbFailed, setThumbFailed] = useState(false);
   const [revealed, setRevealed] = useState(false);
@@ -82,10 +93,26 @@ export function ItemCard({
 
   const domain = item.kind === "link" && item.text ? domainOf(item.text) : "";
 
+  const handleMainClick = (e: React.MouseEvent) => {
+    if (onToggleSelect && (selectMode || e.ctrlKey || e.metaKey || e.shiftKey)) {
+      onSelect?.();
+      onToggleSelect(e.shiftKey ? "range" : "toggle");
+      return;
+    }
+    onAction({ item, action: "paste" });
+  };
+
   return (
     <article
       ref={ref}
-      className={classNames("card", kindClass, selected && "selected", animate && "card--new")}
+      className={classNames(
+        "card",
+        kindClass,
+        selected && "selected",
+        animate && "card--new",
+        selectMode && "selectable-mode",
+        checked && "checked",
+      )}
       data-id={item.id}
       tabIndex={-1}
       onClickCapture={() => onSelect?.()}
@@ -98,9 +125,15 @@ export function ItemCard({
     >
       {item.pinned && <span className="pin-stripe" />}
 
+      {(selectMode || checked) && (
+        <span className="card-check" aria-hidden="true">
+          <Icon name="check" size={11} />
+        </span>
+      )}
+
       <div
         className="card-main"
-        onClick={() => onAction({ item, action: "paste" })}
+        onClick={handleMainClick}
         onContextMenu={(e) => {
           e.preventDefault();
           onAction({ item, action: "menu", x: e.clientX, y: e.clientY });
@@ -109,14 +142,14 @@ export function ItemCard({
         {item.kind === "image" ? (
           <div className="card-image-wrap">
             {thumb ? (
-              <img className="card-thumb" src={thumb} alt="صورة منسوخة" draggable={false} />
+              <img className="card-thumb" src={thumb} alt={t("card.copiedImage")} draggable={false} />
             ) : thumbFailed ? (
               <div className="kind-ico"><Icon name="image" size={15} /></div>
             ) : (
               <div className="skel-block" style={{ width: 96, height: 60 }} />
             )}
             {item.ocrText && (
-              <div className="card-ocr-preview" title={`النص المستخرج: ${item.ocrText}`}>
+              <div className="card-ocr-preview" title={t("card.ocrPreviewTitle", { text: item.ocrText })}>
                 <span className="ocr-mini-badge"><Icon name="scan" size={10} /> OCR</span>
                 <span className="ocr-preview-snippet">{highlight(item.ocrText.slice(0, 120), query)}</span>
               </div>
@@ -151,7 +184,7 @@ export function ItemCard({
                   </div>
                 ))}
                 {(item.files?.length || 0) > 3 && (
-                  <span className="files-more">+ {(item.files?.length || 0) - 3} ملفات أخرى</span>
+                  <span className="files-more">{t("card.filesMore", { n: (item.files?.length || 0) - 3 })}</span>
                 )}
               </div>
             ) : (
@@ -164,57 +197,57 @@ export function ItemCard({
       <div className="card-footer">
         <div className="card-meta">
           {item.sourceApp && (
-            <span className="meta-badge app-badge" title={`منسوخ من: ${item.sourceApp}`}>
+            <span className="meta-badge app-badge" title={t("card.copiedFrom", { app: item.sourceApp })}>
               <Icon name="monitor" size={11} />
-              <span className="app-name">{sourceLabel(item.sourceApp)}</span>
+              <span className="app-name">{sourceLabel(item.sourceApp, lang)}</span>
             </span>
           )}
-          <span className="meta-badge time-badge" title={new Date(item.lastUsedAt).toLocaleString("ar")}>
+          <span className="meta-badge time-badge" title={new Date(item.lastUsedAt).toLocaleString(lang === "ar" ? "ar" : "en-US")}>
             <Icon name="clock" size={11} />
-            <span>{relTime(item.lastUsedAt)}</span>
+            <span>{relTime(item.lastUsedAt, lang)}</span>
           </span>
           {item.useCount > 1 && (
-            <span className="meta-badge count-badge" title={`استُخدم ${item.useCount} مرات`}>
+            <span className="meta-badge count-badge" title={t("card.usedTimes", { n: item.useCount })}>
               ×{item.useCount}
             </span>
           )}
           {item.pinned && (
-            <span className="meta-badge pin-badge" title="مثبت">
+            <span className="meta-badge pin-badge" title={t("card.pinnedTitle")}>
               <Icon name="pin" size={10} filled />
             </span>
           )}
           {item.favorite && (
-            <span className="meta-badge star-badge" title="مفضل">
+            <span className="meta-badge star-badge" title={t("card.favTitle")}>
               <Icon name="star" size={10} filled />
             </span>
           )}
           {item.sensitive && (
-            <span className="meta-badge sens-badge" title="محتوى حساس">
+            <span className="meta-badge sens-badge" title={t("card.sensTitle")}>
               <Icon name="shield" size={10} />
             </span>
           )}
           {item.ocrText && (
-            <span className="meta-badge ocr-badge" title="تم استخراج النص بالتعرف الضوئي (OneOCR)">
+            <span className="meta-badge ocr-badge" title={t("card.ocrBadgeTitle")}>
               <Icon name="scan" size={10} />
               <span>OCR</span>
             </span>
           )}
           {item.tags.length > 0 && (
             <div className="meta-tags">
-              {item.tags.slice(0, 2).map((t) => (
-                <span key={t.id} className="meta-badge tag-badge" style={{ color: t.color }}>
-                  <span className="tag-dot" style={{ background: t.color }} />
-                  {t.name}
+              {item.tags.slice(0, 2).map((tg) => (
+                <span key={tg.id} className="meta-badge tag-badge" style={{ color: tg.color }}>
+                  <span className="tag-dot" style={{ background: tg.color }} />
+                  {tg.name}
                 </span>
               ))}
             </div>
           )}
         </div>
 
-        {/* hover/focus toolbar — now situated neatly in footer, not covering text */}
+        {/* hover/focus toolbar — situated neatly in footer, not covering text */}
         <div className="card-actions" onClick={(e) => e.stopPropagation()}>
           <button
-            className="icon-btn copy-btn" title="نسخ (Enter)" onClick={() => onAction({ item, action: "copy" })}
+            className="icon-btn copy-btn" title={t("card.copyTitle")} onClick={() => onAction({ item, action: "copy" })}
           >
             <Icon name="copy" size={13} />
           </button>
@@ -224,12 +257,12 @@ export function ItemCard({
               className="icon-btn"
               title={
                 item.kind === "image" || isFileImage || isSvgText
-                  ? "معاينة الصورة بالحجم الكامل"
+                  ? t("card.previewImageTitle")
                   : item.html || isHtml(rawText)
-                  ? "معاينة كود HTML (عرض حي وشفرة)"
+                  ? t("card.previewHtmlTitle")
                   : isMarkdown(rawText)
-                  ? "معاينة مستند Markdown منسق"
-                  : "معاينة الكود المنسق"
+                  ? t("card.previewMdTitle")
+                  : t("card.previewCodeTitle")
               }
               onClick={() => onAction({ item, action: "preview" })}
             >
@@ -238,35 +271,35 @@ export function ItemCard({
           )}
 
           {item.kind === "text" && (
-            <button className="icon-btn" title="تعديل النص" onClick={() => onAction({ item, action: "edit" })}>
+            <button className="icon-btn" title={t("card.editTitle")} onClick={() => onAction({ item, action: "edit" })}>
               <Icon name="edit" size={13} />
             </button>
           )}
           {item.kind === "image" && (
             <button
               className={`icon-btn ocr-btn${item.ocrText ? " has-ocr" : ""}`}
-              title={item.ocrText ? "نسخ النص المستخرج (OCR)" : "استخراج النص من الصورة (OneOCR)"}
+              title={item.ocrText ? t("card.ocrBtnCopy") : t("card.ocrBtnNew")}
               onClick={() => onAction({ item, action: item.ocrText ? "copy-ocr" : "ocr" })}
             >
               <Icon name="scan" size={13} />
             </button>
           )}
           {item.kind === "image" && (
-            <button className="icon-btn" title="حفظ الصورة" onClick={() => onAction({ item, action: "save" })}>
+            <button className="icon-btn" title={t("card.saveTitle")} onClick={() => onAction({ item, action: "save" })}>
               <Icon name="download" size={13} />
             </button>
           )}
           {item.kind === "link" && (
-            <button className="icon-btn" title="فتح الرابط" onClick={() => onAction({ item, action: "open" })}>
+            <button className="icon-btn" title={t("card.openTitle")} onClick={() => onAction({ item, action: "open" })}>
               <Icon name="external" size={13} />
             </button>
           )}
           {item.kind === "files" && (
             <>
-              <button className="icon-btn" title="فتح" onClick={() => onAction({ item, action: "open" })}>
+              <button className="icon-btn" title={t("card.openFileTitle")} onClick={() => onAction({ item, action: "open" })}>
                 <Icon name="external" size={13} />
               </button>
-              <button className="icon-btn" title="إظهار في المستكشف" onClick={() => onAction({ item, action: "reveal" })}>
+              <button className="icon-btn" title={t("card.revealTitle")} onClick={() => onAction({ item, action: "reveal" })}>
                 <Icon name="folder" size={13} />
               </button>
             </>
@@ -274,20 +307,20 @@ export function ItemCard({
 
           <button
             className={classNames("icon-btn", item.favorite && "on")}
-            title={item.favorite ? "إزالة من المفضلة" : "إضافة للمفضلة"}
+            title={item.favorite ? t("card.favRemove") : t("card.favAdd")}
             onClick={() => onAction({ item, action: "favorite" })}
           >
             <Icon name="star" size={13} filled={item.favorite} />
           </button>
           <button
             className={classNames("icon-btn", item.pinned && "on")}
-            title={item.pinned ? "إلغاء التثبيت" : "تثبيت"}
+            title={item.pinned ? t("card.pinRemove") : t("card.pinAdd")}
             onClick={() => onAction({ item, action: "pin" })}
           >
             <Icon name="pin" size={13} filled={item.pinned} />
           </button>
           <button
-            className="icon-btn" title="خيارات"
+            className="icon-btn" title={t("card.moreTitle")}
             onClick={(e) => {
               const r = (e.target as HTMLElement).closest("button")!.getBoundingClientRect();
               onAction({ item, action: "menu", x: r.left + r.width / 2, y: r.bottom + 4 });
@@ -299,9 +332,9 @@ export function ItemCard({
       </div>
 
       {masked && (
-        <div className="sens-mask" onClick={(e) => { e.stopPropagation(); setRevealed(true); }} title="اضغط للكشف">
+        <div className="sens-mask" onClick={(e) => { e.stopPropagation(); setRevealed(true); }} title={t("card.maskedTitle")}>
           <span className="sens-hint">
-            <Icon name="shield" size={13} /> محتوى حساس — اضغط للعرض
+            <Icon name="shield" size={13} /> {t("card.maskedHint")}
           </span>
         </div>
       )}
@@ -313,16 +346,16 @@ export function ItemCard({
 function highlight(text: string, query: string): React.ReactNode {
   const q = query.trim();
   if (!q) return text;
-  const tokens = q.split(/\s+/).filter((t) => t.length > 0).slice(0, 4);
+  const tokens = q.split(/\s+/).filter((tk) => tk.length > 0).slice(0, 4);
   if (tokens.length === 0) return text;
   try {
     const re = new RegExp(
-      `(${tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
+      `(${tokens.map((tk) => tk.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
       "gi",
     );
     const parts = text.split(re);
     return parts.map((p, i) =>
-      re.test(p) && tokens.some((t) => p.toLowerCase() === t.toLowerCase())
+      re.test(p) && tokens.some((tk) => p.toLowerCase() === tk.toLowerCase())
         ? <mark key={i}>{p}</mark>
         : p,
     );

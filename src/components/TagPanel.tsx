@@ -3,6 +3,7 @@ import type { TagWithCount, CollectionWithCount } from "../types";
 import { api } from "../api";
 import { Icon } from "../icons";
 import { TAG_COLORS } from "../utils";
+import { useT } from "../i18n";
 
 export type OrgFilter =
   | { type: "tag"; id: number; name: string; color: string }
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function TagPanel({ open, active, tags, collections, onChanged, onFilter, onClose }: Props) {
+  const t = useT();
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [newColName, setNewColName] = useState("");
@@ -59,37 +61,37 @@ export function TagPanel({ open, active, tags, collections, onChanged, onFilter,
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <aside className="side-panel" aria-label="التنظيم">
+      <aside className="side-panel" aria-label={t("org.title")}>
         <div className="panel-head">
-          <span>التنظيم</span>
-          <button className="icon-btn" onClick={onClose} title="إغلاق"><Icon name="x" size={15} /></button>
+          <span>{t("org.title")}</span>
+          <button className="icon-btn" onClick={onClose} title={t("org.close")}><Icon name="x" size={15} /></button>
         </div>
 
         <div className="panel-body">
           {/* tags */}
           <div className="panel-section">
-            <h4>الوسوم</h4>
-            {tags.length === 0 && <div className="org-empty">لا توجد وسوم بعد — أنشئ أول وسم أدناه.</div>}
-            {tags.map((t) => (
+            <h4>{t("org.tags")}</h4>
+            {tags.length === 0 && <div className="org-empty">{t("org.noTags")}</div>}
+            {tags.map((tg) => (
               <div
-                key={t.id}
-                className={`org-row${active?.type === "tag" && active.id === t.id ? " active" : ""}`}
+                key={tg.id}
+                className={`org-row${active?.type === "tag" && active.id === tg.id ? " active" : ""}`}
                 onClick={() => onFilter(
-                  active?.type === "tag" && active.id === t.id
+                  active?.type === "tag" && active.id === tg.id
                     ? null
-                    : { type: "tag", id: t.id, name: t.name, color: t.color },
+                    : { type: "tag", id: tg.id, name: tg.name, color: tg.color },
                 )}
               >
-                <span className="org-dot" style={{ background: t.color }} />
-                <span className="org-name">{t.name}</span>
-                <span className="org-count">{t.count}</span>
+                <span className="org-dot" style={{ background: tg.color }} />
+                <span className="org-name">{tg.name}</span>
+                <span className="org-count">{tg.count}</span>
                 <button
                   className="org-del"
-                  title="حذف الوسم"
+                  title={t("org.deleteTag")}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    if (active?.type === "tag" && active.id === t.id) onFilter(null);
-                    await api.deleteTag(t.id);
+                    if (active?.type === "tag" && active.id === tg.id) onFilter(null);
+                    await api.deleteTag(tg.id);
                     onChanged();
                   }}
                 >
@@ -102,10 +104,10 @@ export function TagPanel({ open, active, tags, collections, onChanged, onFilter,
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addTag()}
-                placeholder="وسم جديد…"
+                placeholder={t("org.newTag")}
                 maxLength={32}
               />
-              <button className="btn primary icon-only" onClick={addTag} title="إضافة وسم">
+              <button className="btn primary icon-only" onClick={addTag} title={t("org.addTag")}>
                 <Icon name="plus" size={14} />
               </button>
             </div>
@@ -116,7 +118,7 @@ export function TagPanel({ open, active, tags, collections, onChanged, onFilter,
                   className={`swatch${newTagColor === c ? " on" : ""}`}
                   style={{ background: c }}
                   onClick={() => setNewTagColor(c)}
-                  aria-label={`لون ${c}`}
+                  aria-label={t("org.tagColor", { color: c })}
                 />
               ))}
             </div>
@@ -124,8 +126,8 @@ export function TagPanel({ open, active, tags, collections, onChanged, onFilter,
 
           {/* collections */}
           <div className="panel-section">
-            <h4>المجموعات</h4>
-            {collections.length === 0 && <div className="org-empty">المجموعات تجمع عناصر ذات صلة معًا.</div>}
+            <h4>{t("org.collections")}</h4>
+            {collections.length === 0 && <div className="org-empty">{t("org.noCollections")}</div>}
             {collections.map((c) => (
               <div
                 key={c.id}
@@ -141,7 +143,7 @@ export function TagPanel({ open, active, tags, collections, onChanged, onFilter,
                 <span className="org-count">{c.count}</span>
                 <button
                   className="org-del"
-                  title="حذف المجموعة"
+                  title={t("org.deleteCollection")}
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (active?.type === "collection" && active.id === c.id) onFilter(null);
@@ -158,10 +160,10 @@ export function TagPanel({ open, active, tags, collections, onChanged, onFilter,
                 value={newColName}
                 onChange={(e) => setNewColName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addCollection()}
-                placeholder="مجموعة جديدة…"
+                placeholder={t("org.newCollection")}
                 maxLength={48}
               />
-              <button className="btn primary icon-only" onClick={addCollection} title="إضافة مجموعة">
+              <button className="btn primary icon-only" onClick={addCollection} title={t("org.addCollection")}>
                 <Icon name="plus" size={14} />
               </button>
             </div>

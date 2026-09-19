@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { api, vaultApi, PAGE_SIZE } from "./api";
-import type { CollectionWithCount, Item, Settings, SortOption, SourceAppStat, TagWithCount } from "./types";
+import type {
+  CollectionWithCount,
+  Item,
+  Settings,
+  SnipCommitResult,
+  SortOption,
+  SourceAppStat,
+  TagWithCount,
+} from "./types";
 import { APP_VERSION } from "./version";
 import { Icon } from "./icons";
 import { ItemCard, type CardActionEvt } from "./components/ItemCard";
@@ -15,27 +23,36 @@ import { PasswordVault } from "./components/PasswordVault";
 import { SmartTypingSuite } from "./components/SmartTypingSuite";
 import { EmptyFiltered, EmptyFirstRun, EmptyResults, Skeletons } from "./components/EmptyState";
 import { Toast } from "./components/Toast";
+import { QrModal } from "./components/QrModal";
+import { MergeModal, SelectionBar } from "./components/Selection";
+import { SnipOverlay } from "./components/SnipOverlay";
+import { transformById, TransformError } from "./utils/transforms";
+import { fmtNum, useI18n, type Lang } from "./i18n";
 
-const FILTERS: Array<{ id: string; label: string; icon: string }> = [
-  { id: "all", label: "الكل", icon: "clipboard" },
-  { id: "text", label: "نصوص", icon: "text" },
-  { id: "link", label: "روابط", icon: "link" },
-  { id: "image", label: "صور", icon: "image" },
-  { id: "files", label: "ملفات", icon: "folder" },
-  { id: "favorite", label: "المفضلة", icon: "star" },
-  { id: "pinned", label: "المثبت", icon: "pin" },
+const FILTERS: Array<{ id: string; labelKey: string; icon: string }> = [
+  { id: "all", labelKey: "filters.all", icon: "clipboard" },
+  { id: "text", labelKey: "filters.text", icon: "text" },
+  { id: "link", labelKey: "filters.link", icon: "link" },
+  { id: "image", labelKey: "filters.image", icon: "image" },
+  { id: "files", labelKey: "filters.files", icon: "folder" },
+  { id: "favorite", labelKey: "filters.favorite", icon: "star" },
+  { id: "pinned", labelKey: "filters.pinned", icon: "pin" },
 ];
 
-const SORT_OPTIONS: Array<{ id: SortOption; label: string; icon: string }> = [
-  { id: "time_desc", label: "الأحدث أولاً (الوقت)", icon: "clock" },
-  { id: "time_asc", label: "الأقدم أولاً", icon: "clock" },
-  { id: "use_count_desc", label: "الأكثر تكراراً", icon: "sparkles" },
-  { id: "source_asc", label: "حسب التطبيق المصدر", icon: "monitor" },
-  { id: "alpha_asc", label: "أبجدياً (النصوص)", icon: "text" },
-  { id: "length_desc", label: "الأطول محتوى", icon: "columns" },
+const SORT_OPTIONS: Array<{ id: SortOption; labelKey: string; icon: string }> = [
+  { id: "time_desc", labelKey: "sort.timeDesc", icon: "clock" },
+  { id: "time_asc", labelKey: "sort.timeAsc", icon: "clock" },
+  { id: "use_count_desc", labelKey: "sort.useCount", icon: "sparkles" },
+  { id: "source_asc", labelKey: "sort.source", icon: "monitor" },
+  { id: "alpha_asc", labelKey: "sort.alpha", icon: "text" },
+  { id: "length_desc", labelKey: "sort.length", icon: "columns" },
 ];
+
+const SEQ_PASTE_DELAY_MS = 700;
 
 export default function App() {
+  const { t, lang, setLang } = useI18n();
+
   // ---------------- state ----------------
   const [items, setItems] = useState<Item[]>([]);
   const [total, setTotal] = useState(0);
@@ -69,6 +86,14 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null);
 
+  // ---- v1.5: multi-select / merge / QR
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [qrText, setQrText] = useState<string | null>(null);
+  const [devSnip, setDevSnip] = useState(false);
+  const anchorRef = useRef<number | null>(null);
+
   const searchRef = useRef<HTMLInputElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const firstLoad = useRef(true);
@@ -78,8 +103,8 @@ export default function App() {
   const notify = useCallback((msg: string, err?: boolean) => setToast({ msg, err }), []);
 
   // ---------------- theme ----------------
-  const applyTheme = useCallback((t: string) => {
-    document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+  const applyTheme = useCallback((th: string) => {
+    document.documentElement.dataset.theme = th === "light" ? "light" : "dark";
   }, []);
 
   // ---------------- data loading ----------------
@@ -92,8 +117,8 @@ export default function App() {
 
   const loadTags = useCallback(async () => {
     try {
-      const [t, c] = await Promise.all([api.getTags(), api.getCollections()]);
-      setTags(t);
+      const [tg, c] = await Promise.all([api.getTags(), api.getCollections()]);
+      setTags(tg);
       setCollections(c);
     } catch { /* silent */ }
   }, []);
@@ -165,8 +190,8 @@ export default function App() {
 
   // debounced search & sort/filter change
   useEffect(() => {
-    const t = setTimeout(() => reload({ silent: items.length > 0 }), query ? 90 : 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => reload({ silent: items.length > 0 }), query ? 90 : 0);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, filter, orgFilter, sortBy, sourceFilter]);
 
@@ -197,7 +222,7 @@ export default function App() {
           const without = prev.filter((p) => p.id !== incoming.id);
           return [incoming, ...without];
         });
-        setTotal((t) => t + 1);
+        setTotal((tt) => tt + 1);
         setFreshIds((prev) => new Set(prev).add(incoming.id));
       } else {
         reload({ silent: true });
@@ -218,6 +243,10 @@ export default function App() {
       setQuery("");
       setFilter("all");
       setOrgFilter(null);
+      setSelectMode(false);
+      setSelectedIds(new Set());
+      setMergeOpen(false);
+      setQrText(null);
     });
     const un6 = listen<Item>("clipvault:item-updated", (e) => {
       setItems((prev) => prev.map((it) => (it.id === e.payload.id ? e.payload : it)));
@@ -227,10 +256,19 @@ export default function App() {
       const text = e.payload || "";
       setImportedSpellText(text);
       if (text) {
-        notify(`تم استيراد النص المحدد (${text.slice(0, 20)}${text.length > 20 ? "..." : ""}) للتدقيق`);
+        const sample = `${text.slice(0, 20)}${text.length > 20 ? "…" : ""}`;
+        notify(t("toast.importedText", { sample }));
       } else {
-        notify("تم فتح التدقيق الإملائي — الصق أو اكتب النص لفحصه");
+        notify(t("toast.importedEmpty"));
       }
+    });
+    const un8 = listen<SnipCommitResult>("clipvault:snip-complete", (e) => {
+      reload({ silent: true });
+      notify(
+        e.payload.hasOcrText
+          ? t("toast.snipDoneOcr")
+          : t("toast.snipDone"),
+      );
     });
     return () => {
       un1.then((f) => f());
@@ -241,20 +279,33 @@ export default function App() {
       un5.then((f) => f());
       un6.then((f) => f());
       un7.then((f) => f());
+      un8.then((f) => f());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reload, loadTags]);
+  }, [reload, loadTags, notify, t]);
+
+  // QR modal copy/save confirmations (window-level custom events from QrModal)
+  useEffect(() => {
+    const onCopied = () => notify(t("toast.qrCopiedImage"));
+    const onSaved = () => notify(t("toast.qrSaved"));
+    window.addEventListener("clipvault:qr-copied", onCopied);
+    window.addEventListener("clipvault:qr-saved", onSaved);
+    return () => {
+      window.removeEventListener("clipvault:qr-copied", onCopied);
+      window.removeEventListener("clipvault:qr-saved", onSaved);
+    };
+  }, [notify, t]);
 
   // ---------------- actions ----------------
   const doCopy = useCallback(async (item: Item) => {
     try {
       await api.copyItem(item.id);
       await api.hideWindow();
-      notify("تم النسخ للمحفظة");
+      notify(t("toast.copied"));
     } catch (e) {
       notify(String(e), true);
     }
-  }, [notify]);
+  }, [notify, t]);
 
   const doPaste = useCallback(async (item: Item) => {
     try {
@@ -268,13 +319,13 @@ export default function App() {
     try {
       if (flag === "pin") {
         await api.setPin(item.id, !item.pinned);
-        notify(item.pinned ? "تم إلغاء التثبيت" : "تم التثبيت");
+        notify(item.pinned ? t("toast.pinOff") : t("toast.pinOn"));
       } else if (flag === "favorite") {
         await api.setFavorite(item.id, !item.favorite);
-        notify(item.favorite ? "أُزيل من المفضلة" : "أُضيف للمفضلة");
+        notify(item.favorite ? t("toast.favOff") : t("toast.favOn"));
       } else {
         await api.setSensitive(item.id, !item.sensitive);
-        notify(item.sensitive ? "أُلغي التمييز كحساس" : "تم التمييز كحساس");
+        notify(item.sensitive ? t("toast.sensOff") : t("toast.sensOn"));
       }
       setItems((prev) =>
         prev.map((p) => {
@@ -290,20 +341,25 @@ export default function App() {
     } catch (e) {
       notify(String(e), true);
     }
-  }, [notify, reload]);
+  }, [notify, reload, t]);
 
   const doDelete = useCallback(async (item: Item) => {
     try {
       await api.deleteItem(item.id);
       setItems((prev) => prev.filter((p) => p.id !== item.id));
-      setTotal((t) => Math.max(0, t - 1));
+      setTotal((tt) => Math.max(0, tt - 1));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
       loadTags();
       loadSources();
-      notify("تم الحذف");
+      notify(t("toast.deleted"));
     } catch (e) {
       notify(String(e), true);
     }
-  }, [loadSources, loadTags, notify]);
+  }, [loadSources, loadTags, notify, t]);
 
   const saveEdit = useCallback(async () => {
     if (!editItem) return;
@@ -312,12 +368,21 @@ export default function App() {
     try {
       await api.editItemText(editItem.id, text);
       setItems((prev) => prev.map((p) => (p.id === editItem.id ? { ...p, text, html: null } : p)));
-      notify("تم حفظ التعديل");
+      notify(t("toast.editSaved"));
     } catch (e) {
       notify(String(e), true);
     }
     setEditItem(null);
-  }, [editItem, editText, notify]);
+  }, [editItem, editText, notify, t]);
+
+  const beginSnip = useCallback(() => {
+    // Dev mock: render the overlay inside the main window (no second window in a browser).
+    if ((window as unknown as { __CV_DEV_MOCK__?: boolean }).__CV_DEV_MOCK__) {
+      setDevSnip(true);
+      return;
+    }
+    api.snipBegin().catch((e) => notify(t("toast.snipFailed", { reason: String(e) }), true));
+  }, [notify, t]);
 
   const handleCardAction = useCallback((e: CardActionEvt) => {
     const { item, action } = e;
@@ -329,7 +394,7 @@ export default function App() {
       case "preview": setPreviewItem(item); break;
       case "edit": setEditItem(item); setEditText(item.text || ""); break;
       case "save":
-        api.saveImage(item.id).then((p) => p && notify("تم حفظ الصورة")).catch((err) => notify(String(err), true));
+        api.saveImage(item.id).then((p) => p && notify(t("toast.imageSaved"))).catch((err) => notify(String(err), true));
         break;
       case "open":
         api.openItem(item.id).catch((err) => notify(String(err), true));
@@ -338,14 +403,14 @@ export default function App() {
         api.revealItem(item.id).catch((err) => notify(String(err), true));
         break;
       case "ocr":
-        notify("جارٍ استخراج النص بتقنية OneOCR...");
+        notify(t("toast.ocrRunning"));
         api.extractOcr(item.id)
           .then((res: { text: string }) => {
             if (res.text) {
               navigator.clipboard.writeText(res.text).catch(() => {});
-              notify("تم استخراج النص ونسخه للحافظة بنجاح!");
+              notify(t("toast.ocrDone"));
             } else {
-              notify("لم يتم العثور على أي نصوص واضحة في الصورة.", true);
+              notify(t("toast.ocrNone"), true);
             }
           })
           .catch((err: unknown) => notify(String(err), true));
@@ -353,11 +418,33 @@ export default function App() {
       case "copy-ocr":
         if (item.ocrText) {
           navigator.clipboard.writeText(item.ocrText).catch(() => {});
-          notify("تم نسخ النص المستخرج!");
+          notify(t("toast.ocrCopied"));
         }
         break;
     }
-  }, [doCopy, doPaste, notify, toggleFlag]);
+  }, [doCopy, doPaste, notify, t, toggleFlag]);
+
+  const applyTransform = useCallback(async (item: Item, transformId: string) => {
+    const tr = transformById(transformId);
+    if (!tr) return;
+    const source = (item.text ?? item.ocrText ?? "").trim();
+    if (!source) return;
+    try {
+      const result = tr.apply(source);
+      if (!result.trim()) {
+        notify(t("tr.emptyResult"), true);
+        return;
+      }
+      await api.addTextItem(result, "ClipVault ✦");
+      notify(t("toast.transformDone", { name: t(tr.key) }));
+    } catch (e) {
+      if (e instanceof TransformError) {
+        notify(t("toast.transformFailed", { reason: t(e.reasonKey) }), true);
+      } else {
+        notify(String(e), true);
+      }
+    }
+  }, [notify, t]);
 
   const handleMenuAction = useCallback(async (a: MenuAction, item: Item) => {
     setMenu(null);
@@ -369,7 +456,7 @@ export default function App() {
       case "preview": setPreviewItem(item); break;
       case "panel": setPanelOpen(true); break;
       case "save":
-        api.saveImage(item.id).then((p) => p && notify("تم حفظ الصورة")).catch((err) => notify(String(err), true));
+        api.saveImage(item.id).then((p) => p && notify(t("toast.imageSaved"))).catch((err) => notify(String(err), true));
         break;
       case "open":
         api.openItem(item.id).catch((err) => notify(String(err), true));
@@ -378,14 +465,14 @@ export default function App() {
         api.revealItem(item.id).catch((err) => notify(String(err), true));
         break;
       case "ocr":
-        notify("جارٍ استخراج النص بتقنية OneOCR...");
+        notify(t("toast.ocrRunning"));
         api.extractOcr(item.id)
           .then((res: { text: string }) => {
             if (res.text) {
               navigator.clipboard.writeText(res.text).catch(() => {});
-              notify("تم استخراج النص ونسخه للحافظة بنجاح!");
+              notify(t("toast.ocrDone"));
             } else {
-              notify("لم يتم العثور على أي نصوص واضحة في الصورة.", true);
+              notify(t("toast.ocrNone"), true);
             }
           })
           .catch((err: unknown) => notify(String(err), true));
@@ -393,9 +480,18 @@ export default function App() {
       case "copy-ocr":
         if (item.ocrText) {
           navigator.clipboard.writeText(item.ocrText).catch(() => {});
-          notify("تم نسخ النص المستخرج!");
+          notify(t("toast.ocrCopied"));
         }
         break;
+      case "transform":
+        if (a.transformId) await applyTransform(item, a.transformId);
+        break;
+      case "qr": {
+        const text = (item.text || item.ocrText || "").trim();
+        if (!text) { notify(t("toast.qrEmpty"), true); return; }
+        setQrText(text);
+        break;
+      }
       case "toggle-tag":
         if (a.tagId != null) {
           try {
@@ -415,34 +511,118 @@ export default function App() {
         }
         break;
     }
-  }, [doCopy, doDelete, loadTags, notify, reload, toggleFlag]);
+  }, [applyTransform, doCopy, doDelete, loadTags, notify, reload, t, toggleFlag]);
 
   const applySettingsPatch = useCallback(async (patch: Record<string, string>) => {
     await api.setSettings(patch);
     setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
     if (patch.theme) applyTheme(patch.theme);
-  }, [applyTheme]);
+    if (patch.lang === "ar" || patch.lang === "en") setLang(patch.lang as Lang);
+  }, [applyTheme, setLang]);
 
   const changePaused = useCallback(async (p: boolean) => {
     try {
       await api.setPaused(p);
       setPaused(p);
-      notify(p ? "أُوقف التسجيل مؤقتًا" : "استؤنف التسجيل");
+      notify(p ? t("toast.pausedOn") : t("toast.pausedOff"));
     } catch (e) {
       notify(String(e), true);
     }
-  }, [notify]);
+  }, [notify, t]);
 
   const clearAll = useCallback(async () => {
     try {
       const n = await api.clearHistory();
-      notify(n > 0 ? `حُذفت ${n} عنصر` : "لا يوجد ما يُحذف");
+      notify(n > 0 ? t("toast.cleared", { n }) : t("toast.nothingToClear"));
       reload();
       loadTags();
     } catch (e) {
       notify(String(e), true);
     }
-  }, [loadTags, notify, reload]);
+  }, [loadTags, notify, reload, t]);
+
+  // ---------------- v1.5: multi-select ----------------
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setMergeOpen(false);
+  }, []);
+
+  const toggleSelect = useCallback((id: number, additive: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set<number>(additive ? prev : []);
+      if (prev.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const rangeSelect = useCallback((index: number) => {
+    const anchor = anchorRef.current;
+    if (anchor == null) {
+      const it = items[index];
+      if (it) setSelectedIds((prev) => new Set(prev).add(it.id));
+      anchorRef.current = index;
+      return;
+    }
+    const [from, to] = anchor <= index ? [anchor, index] : [index, anchor];
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (let i = from; i <= to; i++) {
+        const it = items[i];
+        if (it) next.add(it.id);
+      }
+      return next;
+    });
+  }, [items]);
+
+  const selectAllVisible = useCallback(() => {
+    setSelectedIds(new Set(items.map((it) => it.id)));
+  }, [items]);
+
+  const pasteSequence = useCallback(async () => {
+    const ordered = items.filter((it) => selectedIds.has(it.id));
+    if (ordered.length === 0) return;
+    setMergeOpen(false);
+    notify(t("toast.seqPasteStarted", { n: ordered.length }));
+    await api.hideWindow().catch(() => {});
+    for (const it of ordered) {
+      try {
+        await api.pasteItem(it.id);
+      } catch { /* keep going */ }
+      await new Promise((r) => setTimeout(r, SEQ_PASTE_DELAY_MS));
+    }
+    notify(t("toast.seqPasteDone", { n: ordered.length }));
+    exitSelectMode();
+  }, [exitSelectMode, items, notify, selectedIds, t]);
+
+  const confirmMerge = useCallback(async (mergedText: string) => {
+    try {
+      await api.addTextItem(mergedText, "ClipVault ✦");
+      notify(t("toast.mergeSaved"));
+      setMergeOpen(false);
+      exitSelectMode();
+    } catch (e) {
+      notify(String(e), true);
+    }
+  }, [exitSelectMode, notify, t]);
+
+  const deleteSelected = useCallback(async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      for (const id of ids) {
+        await api.deleteItem(id);
+      }
+      notify(t("toast.selDeleted", { n: ids.length }));
+      exitSelectMode();
+      reload({ silent: true });
+      loadTags();
+      loadSources();
+    } catch (e) {
+      notify(String(e), true);
+    }
+  }, [exitSelectMode, loadSources, loadTags, notify, reload, selectedIds, t]);
 
   // ---------------- keyboard ----------------
   useEffect(() => {
@@ -460,6 +640,12 @@ export default function App() {
       if (mod && e.key === "5") { e.preventDefault(); setView("settings"); return; }
       if (mod && e.key === ",") { e.preventDefault(); setView((v) => (v === "settings" ? "home" : "settings")); return; }
       if (mod && (e.key === "/" || e.key === "?")) { e.preventDefault(); setHelpOpen((v) => !v); return; }
+      if (mod && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        const next: Lang = lang === "ar" ? "en" : "ar";
+        setLang(next);
+        return;
+      }
       if (helpOpen && e.key === "Escape") { setHelpOpen(false); return; }
       if (view === "settings") { if (e.key === "Escape") setView("home"); return; }
       if (view === "home") {
@@ -479,6 +665,9 @@ export default function App() {
         e.preventDefault();
         if (editItem) { setEditItem(null); return; }
         if (previewItem) { setPreviewItem(null); return; }
+        if (qrText != null) { setQrText(null); return; }
+        if (mergeOpen) { setMergeOpen(false); return; }
+        if (selectMode) { exitSelectMode(); return; }
         if (panelOpen) { setPanelOpen(false); return; }
         if (query) { setQuery(""); return; }
         api.hideWindow();
@@ -506,15 +695,20 @@ export default function App() {
           });
           return;
         }
-        if (!mod && e.key === "Enter") {
+        if (!mod && e.key === "Enter" && !selectMode) {
           e.preventDefault();
           const item = items[selectedIdx] ?? items[0];
           if (item) doPaste(item);
           return;
         }
+        if (mod && e.key.toLowerCase() === "a" && selectMode) {
+          e.preventDefault();
+          selectAllVisible();
+          return;
+        }
       }
 
-      if (!mod && e.key === "Delete" && items[selectedIdx]) {
+      if (!mod && e.key === "Delete" && items[selectedIdx] && !selectMode) {
         e.preventDefault();
         doDelete(items[selectedIdx]);
         return;
@@ -537,7 +731,7 @@ export default function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [doDelete, editItem, helpOpen, items, panelOpen, previewItem, query, selectedIdx, view]);
+  }, [doDelete, editItem, exitSelectMode, helpOpen, items, lang, mergeOpen, panelOpen, previewItem, query, qrText, selectAllVisible, selectedIdx, selectMode, setLang, view]);
 
   // Keep selectedIdx within bounds when items change
   useEffect(() => {
@@ -550,19 +744,23 @@ export default function App() {
   const shortcut = settings?.globalShortcut || "Ctrl+Shift+V";
   const selected = items[selectedIdx] ?? null;
   const isEmpty = !loading && items.length === 0;
+  const selectedItems = useMemo(
+    () => items.filter((it) => selectedIds.has(it.id)),
+    [items, selectedIds],
+  );
 
   const chipNode = useMemo(() => {
     if (!orgFilter) return null;
     const label = orgFilter.name;
     const color = orgFilter.type === "tag" ? orgFilter.color : undefined;
     return (
-      <button className="chip active" onClick={() => setOrgFilter(null)} title="إزالة التصفية">
+      <button className="chip active" onClick={() => setOrgFilter(null)} title={t("search.filterRemove")}>
         {color && <span className="dot" style={{ background: color }} />}
         {label}
         <span className="chip-x"><Icon name="x" size={12} /></span>
       </button>
     );
-  }, [orgFilter]);
+  }, [orgFilter, t]);
 
   return (
     <div id="app">
@@ -572,7 +770,7 @@ export default function App() {
           <div
             className="top-brand"
             onClick={() => setView("home")}
-            title="ClipVault — الرئيسية"
+            title={t("nav.brandTitle")}
             role="button"
             tabIndex={0}
           >
@@ -586,22 +784,22 @@ export default function App() {
           <div className="top-controls">
             <button
               className={`top-control-btn${paused ? " warn" : ""}`}
-              title={paused ? "التسجيل متوقف — انقر للاستئناف" : "إيقاف التسجيل مؤقتًا"}
+              title={paused ? t("nav.pausedTitle") : t("nav.pauseTitle")}
               onClick={() => changePaused(!paused)}
             >
               <Icon name={paused ? "play" : "pause"} size={13} />
-              <span className="control-btn-label">{paused ? "متوقف" : "نشط"}</span>
+              <span className="control-btn-label">{paused ? t("nav.pausedLabel") : t("nav.activeLabel")}</span>
             </button>
             <button
               className="top-control-btn theme-toggle"
-              title="تبديل المظهر (Ctrl+T)"
+              title={t("nav.themeTitle")}
               onClick={() => applySettingsPatch({ theme: (settings?.theme === "light" ? "dark" : "light") })}
             >
               <Icon name={settings?.theme === "light" ? "sun" : "moon"} size={14} />
             </button>
             <button
               className={`top-control-btn settings-toggle${view === "settings" ? " active" : ""}`}
-              title="الإعدادات (Ctrl+5)"
+              title={t("nav.settingsBtnTitle")}
               onClick={() => setView((v) => (v === "settings" ? "home" : "settings"))}
             >
               <Icon name="settings" size={14} />
@@ -609,14 +807,14 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="nav-tabs-bar" aria-label="أقسام التطبيق">
+        <nav className="nav-tabs-bar" aria-label={t("nav.sections")}>
           <button
             className={`nav-tab${view === "home" ? " active" : ""}`}
             onClick={() => setView("home")}
-            title="الرئيسية (Ctrl+1)"
+            title={t("nav.homeTitle")}
           >
             <Icon name="home" size={13} />
-            <span>الرئيسية</span>
+            <span>{t("nav.home")}</span>
           </button>
           <button
             className={`nav-tab${view === "list" ? " active" : ""}`}
@@ -624,36 +822,36 @@ export default function App() {
               setView("list");
               setTimeout(() => searchRef.current?.focus(), 30);
             }}
-            title="الحافظة (Ctrl+2)"
+            title={t("nav.clipboardTitle")}
           >
             <Icon name="clipboard" size={13} />
-            <span>الحافظة</span>
-            {total > 0 && <span className="tab-count">{total}</span>}
+            <span>{t("nav.clipboard")}</span>
+            {total > 0 && <span className="tab-count">{fmtNum(total, lang)}</span>}
           </button>
           <button
             className={`nav-tab${view === "passwords" ? " active" : ""}`}
             onClick={() => setView("passwords")}
-            title="كلمات المرور (Ctrl+3)"
+            title={t("nav.passwordsTitle")}
           >
             <Icon name="lock" size={13} />
-            <span>كلمات المرور</span>
-            {vaultCount > 0 && <span className="tab-count">{vaultCount}</span>}
+            <span>{t("nav.passwords")}</span>
+            {vaultCount > 0 && <span className="tab-count">{fmtNum(vaultCount, lang)}</span>}
           </button>
           <button
             className={`nav-tab${view === "typing" ? " active" : ""}`}
             onClick={() => setView("typing")}
-            title="الكتابة والتدقيق الذكي (Ctrl+4)"
+            title={t("nav.typingTitle")}
           >
             <Icon name="sparkles" size={13} />
-            <span>الكتابة الذكية</span>
+            <span>{t("nav.typing")}</span>
           </button>
           <button
             className={`nav-tab${view === "settings" ? " active" : ""}`}
             onClick={() => setView("settings")}
-            title="الإعدادات (Ctrl+5)"
+            title={t("nav.settingsTitle")}
           >
             <Icon name="settings" size={13} />
-            <span>الإعدادات</span>
+            <span>{t("nav.settings")}</span>
           </button>
         </nav>
 
@@ -665,18 +863,18 @@ export default function App() {
               <input
                 ref={searchRef}
                 className="search-input"
-                placeholder="ابحث في الحافظة…"
+                placeholder={t("search.placeholder")}
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setSelectedIdx(0); }}
                 spellCheck={false}
                 autoFocus
               />
               {query && (
-                <button className="search-clear" onClick={() => { setQuery(""); searchRef.current?.focus(); }} title="مسح">
+                <button className="search-clear" onClick={() => { setQuery(""); searchRef.current?.focus(); }} title={t("search.clear")}>
                   <Icon name="x" size={11} />
                 </button>
               )}
-              <kbd>↵ لصق</kbd>
+              <kbd>↵ {t("search.pasteHint")}</kbd>
             </div>
           </div>
         )}
@@ -685,22 +883,35 @@ export default function App() {
       {/* filter chips: only in list view */}
       {view === "list" && (
         <nav className="chips">
-          {FILTERS.map((f, i) => (
+          {FILTERS.map((f) => (
             <button
               key={f.id}
               className={`chip${filter === f.id && !orgFilter ? " active" : ""}`}
               onClick={() => { setFilter(f.id); setOrgFilter(null); }}
-              title={`Ctrl+${i + 1}`}
             >
               <Icon name={f.icon} size={12} />
-              {f.label}
+              {t(f.labelKey)}
             </button>
           ))}
           <span className="chips-spacer" />
           {chipNode}
           <button
+            className="icon-btn"
+            title={`${t("home.snipTitle")} (Ctrl+Shift+S)`}
+            onClick={beginSnip}
+          >
+            <Icon name="crop" size={14} />
+          </button>
+          <button
+            className={`icon-btn${selectMode ? " active" : ""}`}
+            title={t("sel.modeTitle")}
+            onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+          >
+            <Icon name="listChecks" size={14} />
+          </button>
+          <button
             className={`icon-btn${panelOpen ? " active" : ""}`}
-            title="الوسوم والمجموعات (Ctrl+Shift+N)"
+            title={t("search.tagPanelTitle")}
             onClick={() => setPanelOpen((v) => !v)}
           >
             <Icon name="tag" size={14} />
@@ -721,16 +932,16 @@ export default function App() {
                   setSortMenuOpen((v) => !v);
                   setSourceMenuOpen(false);
                 }}
-                title="تغيير طريقة فرز وترتيب العناصر"
+                title={t("sort.title")}
               >
                 <Icon name="columns" size={12} />
-                <span>{SORT_OPTIONS.find((s) => s.id === sortBy)?.label || "الأحدث"}</span>
+                <span>{t(SORT_OPTIONS.find((s) => s.id === sortBy)?.labelKey || "sort.newest")}</span>
                 <span className="arrow-sym">▾</span>
               </button>
 
               {sortMenuOpen && (
                 <div className="sort-popover animate-in" onClick={(e) => e.stopPropagation()}>
-                  <div className="popover-heading">ترتيب وفرز السجل</div>
+                  <div className="popover-heading">{t("sort.heading")}</div>
                   {SORT_OPTIONS.map((opt) => (
                     <button
                       key={opt.id}
@@ -741,7 +952,7 @@ export default function App() {
                       }}
                     >
                       <Icon name={opt.icon} size={13} />
-                      <span className="popover-item-label">{opt.label}</span>
+                      <span className="popover-item-label">{t(opt.labelKey)}</span>
                       {sortBy === opt.id && <Icon name="check" size={12} />}
                     </button>
                   ))}
@@ -759,16 +970,16 @@ export default function App() {
                   setSortMenuOpen(false);
                   loadSources();
                 }}
-                title="تصفية حسب مصدر النسخ (التطبيق)"
+                title={t("sourceMenu.title")}
               >
                 <Icon name="monitor" size={12} />
-                <span>{sourceFilter ? sourceFilter : "كل التطبيقات"}</span>
+                <span>{sourceFilter ? sourceFilter : t("sourceMenu.all")}</span>
                 <span className="arrow-sym">▾</span>
               </button>
 
               {sourceMenuOpen && (
                 <div className="sort-popover animate-in" onClick={(e) => e.stopPropagation()}>
-                  <div className="popover-heading">تصفية حسب مصدر النسخ</div>
+                  <div className="popover-heading">{t("sourceMenu.heading")}</div>
                   <button
                     className={`popover-item${!sourceFilter ? " active" : ""}`}
                     onClick={() => {
@@ -777,12 +988,12 @@ export default function App() {
                     }}
                   >
                     <Icon name="clipboard" size={13} />
-                    <span className="popover-item-label">جميع التطبيقات</span>
+                    <span className="popover-item-label">{t("sourceMenu.allApps")}</span>
                     {!sourceFilter && <Icon name="check" size={12} />}
                   </button>
                   <div className="popover-divider" />
                   {sources.length === 0 ? (
-                    <div className="popover-hint">لا توجد تطبيقات مسجلة بعد</div>
+                    <div className="popover-hint">{t("sourceMenu.empty")}</div>
                   ) : (
                     sources.map((src) => (
                       <button
@@ -795,7 +1006,7 @@ export default function App() {
                       >
                         <Icon name="monitor" size={13} />
                         <span className="popover-item-label">{src.name}</span>
-                        <span className="popover-count-pill">{src.count}</span>
+                        <span className="popover-count-pill">{fmtNum(src.count, lang)}</span>
                       </button>
                     ))
                   )}
@@ -809,7 +1020,7 @@ export default function App() {
             <button
               className="chip active source-active-chip"
               onClick={() => setSourceFilter(null)}
-              title="إلغاء تصفية المصدر"
+              title={t("sourceMenu.chipTitle")}
             >
               <Icon name="monitor" size={11} />
               <span>{sourceFilter}</span>
@@ -819,11 +1030,25 @@ export default function App() {
         </div>
       )}
 
+      {/* v1.5: floating selection action bar */}
+      {view === "list" && selectMode && (
+        <SelectionBar
+          count={selectedIds.size}
+          total={items.length}
+          onPasteSeq={pasteSequence}
+          onMerge={() => setMergeOpen(true)}
+          onDelete={deleteSelected}
+          onSelectAll={selectAllVisible}
+          onClear={() => setSelectedIds(new Set())}
+          onExit={exitSelectMode}
+        />
+      )}
+
       {paused && (
         <div className="paused-banner" onClick={() => changePaused(false)}>
           <Icon name="pause" size={14} />
-          التسجيل متوقف مؤقتًا — لن يُسجَّل أي محتوى جديد
-          <span className="p-btn">استئناف</span>
+          {t("pausedBanner.text")}
+          <span className="p-btn">{t("pausedBanner.resume")}</span>
         </div>
       )}
 
@@ -843,6 +1068,7 @@ export default function App() {
           onToggleTheme={() => applySettingsPatch({ theme: settings?.theme === "light" ? "dark" : "light" })}
           onClearHistory={clearAll}
           onNotify={notify}
+          onSnip={beginSnip}
         />
       )}
 
@@ -879,16 +1105,24 @@ export default function App() {
                 <ItemCard
                   key={item.id}
                   item={item}
+                  index={i}
                   selected={i === selectedIdx}
                   animate={freshIds.has(item.id)}
                   query={query}
+                  selectMode={selectMode}
+                  checked={selectedIds.has(item.id)}
+                  onToggleSelect={(mode) => {
+                    if (mode === "range") rangeSelect(i);
+                    else toggleSelect(item.id, true);
+                    anchorRef.current = i;
+                  }}
                   onAction={handleCardAction}
                   onSelect={() => setSelectedIdx(i)}
                 />
               ))}
               {hasMore && <div ref={sentinelRef} style={{ height: 8 }} />}
               {!hasMore && items.length > 8 && (
-                <div className="list-end-note">نهاية القائمة — استخدم البحث للوصول السريع لأي عنصر</div>
+                <div className="list-end-note">{t("footer.endNote")}</div>
               )}
             </>
           )}
@@ -898,11 +1132,11 @@ export default function App() {
       {/* footer (only for list) */}
       {view === "list" && (
         <footer className="footer">
-          <span>{loading ? "…" : `${total.toLocaleString("en")} عنصر`}</span>
+          <span>{loading ? "…" : `${fmtNum(total, lang)} ${t("footer.items")}`}</span>
           <div className="hints">
-            <kbd>↑↓</kbd><span>تنقل</span>
-            <kbd>Enter</kbd><span>لصق</span>
-            <kbd>Ctrl+/</kbd><span>الاختصارات</span>
+            <kbd>↑↓</kbd><span>{t("footer.navigate")}</span>
+            <kbd>Enter</kbd><span>{t("footer.paste")}</span>
+            <kbd>Ctrl+/</kbd><span>{t("footer.shortcuts")}</span>
           </div>
         </footer>
       )}
@@ -932,13 +1166,35 @@ export default function App() {
 
       {previewItem && <Preview item={previewItem} onClose={() => setPreviewItem(null)} />}
 
+      {/* v1.5: dev-mode snip overlay (browser preview only) */}
+      {devSnip && (
+        <SnipOverlay
+          onClose={() => setDevSnip(false)}
+          onCommitted={(r) => {
+            setDevSnip(false);
+            reload({ silent: true });
+            notify(r.hasOcrText ? t("toast.snipDoneOcr") : t("toast.snipDone"));
+          }}
+        />
+      )}
+
+      {qrText != null && <QrModal text={qrText} onClose={() => setQrText(null)} />}
+
+      {mergeOpen && selectedItems.length >= 2 && (
+        <MergeModal
+          items={selectedItems}
+          onCancel={() => setMergeOpen(false)}
+          onConfirm={confirmMerge}
+        />
+      )}
+
       {editItem && (
         <div className="preview-overlay" onClick={() => setEditItem(null)}>
           <div
             className="help-card edit-dialog"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3><Icon name="edit" size={15} /> تعديل النص</h3>
+            <h3><Icon name="edit" size={15} /> {t("editDialog.title")}</h3>
             <textarea
               className="selectable edit-dialog-textarea"
               value={editText}
@@ -949,8 +1205,8 @@ export default function App() {
               autoFocus
             />
             <div className="edit-dialog-actions">
-              <button className="btn primary" onClick={saveEdit}>حفظ (Ctrl+Enter)</button>
-              <button className="btn" onClick={() => setEditItem(null)}>إلغاء</button>
+              <button className="btn primary" onClick={saveEdit}>{t("editDialog.save")}</button>
+              <button className="btn" onClick={() => setEditItem(null)}>{t("editDialog.cancel")}</button>
             </div>
           </div>
         </div>
@@ -959,49 +1215,55 @@ export default function App() {
       {helpOpen && (
         <div className="help-sheet" onClick={() => setHelpOpen(false)}>
           <div className="help-card" onClick={(e) => e.stopPropagation()}>
-            <h3><Icon name="keyboard" size={16} /> اختصارات لوحة المفاتيح</h3>
+            <h3><Icon name="keyboard" size={16} /> {t("help.title")}</h3>
             <div className="settings-group">
-              <h4>عام</h4>
+              <h4>{t("help.general")}</h4>
               <div className="keys-grid">
-                <span className="k-desc">فتح / إخفاء الحافظة</span>
+                <span className="k-desc">{t("help.openHide")}</span>
                 <span className="k-keys"><kbd>{shortcut}</kbd></span>
-                <span className="k-desc">البحث الفوري</span>
-                <span className="k-keys"><span style={{ color: "var(--text-3)" }}>اكتب مباشرة</span></span>
-                <span className="k-desc">لصق العنصر المحدد</span>
+                <span className="k-desc">{t("help.instantSearch")}</span>
+                <span className="k-keys"><span style={{ color: "var(--text-3)" }}>{t("help.typeDirect")}</span></span>
+                <span className="k-desc">{t("help.pasteSelected")}</span>
                 <span className="k-keys"><kbd>Enter</kbd></span>
-                <span className="k-desc">التنقل بين العناصر</span>
+                <span className="k-desc">{t("help.navigate")}</span>
                 <span className="k-keys"><kbd>↑</kbd><kbd>↓</kbd></span>
-                <span className="k-desc">قفزة سريعة</span>
+                <span className="k-desc">{t("help.quickJump")}</span>
                 <span className="k-keys"><kbd>Shift+↑↓</kbd></span>
-                <span className="k-desc">إخفاء النافذة</span>
+                <span className="k-desc">{t("help.snip")}</span>
+                <span className="k-keys"><kbd>Ctrl+Shift+S</kbd></span>
+                <span className="k-desc">{t("help.multiSelect")}</span>
+                <span className="k-keys"><kbd>Ctrl+Click</kbd></span>
+                <span className="k-desc">{t("help.langSwitch")}</span>
+                <span className="k-keys"><kbd>Ctrl+L</kbd></span>
+                <span className="k-desc">{t("help.hideWin")}</span>
                 <span className="k-keys"><kbd>Esc</kbd></span>
               </div>
             </div>
             <div className="settings-group">
-              <h4>الكتابة والتدقيق الذكي</h4>
+              <h4>{t("help.typing")}</h4>
               <div className="keys-grid">
-                <span className="k-desc">تصحيح النص المحدد بأي تطبيق</span>
+                <span className="k-desc">{t("help.fixSelected")}</span>
                 <span className="k-keys"><kbd>Ctrl+Shift+X</kbd></span>
-                <span className="k-desc">الانتقال للكتابة الذكية</span>
+                <span className="k-desc">{t("help.goTyping")}</span>
                 <span className="k-keys"><kbd>Ctrl+4</kbd></span>
-                <span className="k-desc">تبديل الاتجاه (عربي ↔ إنجليزي)</span>
+                <span className="k-desc">{t("help.switchDir")}</span>
                 <span className="k-keys"><kbd>Alt+S</kbd></span>
-                <span className="k-desc">تطبيق الكل / نسخ النتيجة</span>
+                <span className="k-desc">{t("help.applyAll")}</span>
                 <span className="k-keys"><kbd>Ctrl+Enter</kbd></span>
-                <span className="k-desc">لصق بالتطبيق النشط</span>
+                <span className="k-desc">{t("help.pasteActive")}</span>
                 <span className="k-keys"><kbd>Shift+Enter</kbd></span>
               </div>
             </div>
             <div className="settings-group">
-              <h4>على العنصر المحدد</h4>
+              <h4>{t("help.onItem")}</h4>
               <div className="keys-grid">
-                <span className="k-desc">حذف</span>
+                <span className="k-desc">{t("help.delete")}</span>
                 <span className="k-keys"><kbd>Delete</kbd></span>
-                <span className="k-desc">معاينة الصورة</span>
+                <span className="k-desc">{t("help.previewImg")}</span>
                 <span className="k-keys"><kbd>Space</kbd></span>
-                <span className="k-desc">تصفيات سريعة</span>
+                <span className="k-desc">{t("help.quickFilters")}</span>
                 <span className="k-keys"><kbd>Ctrl+1…7</kbd></span>
-                <span className="k-desc">الإعدادات</span>
+                <span className="k-desc">{t("help.settings")}</span>
                 <span className="k-keys"><kbd>Ctrl+,</kbd></span>
               </div>
             </div>

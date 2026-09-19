@@ -1034,3 +1034,304 @@
   font-size: var(--fs-xs);
   color: var(--text-3);
 }
+
+/* ==========================================================================
+   v1.5 — Snip overlay (region screenshot → OCR)
+   ========================================================================== */
+
+.snip-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+}
+.snip-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+.snip-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+}
+.snip-selection {
+  position: absolute;
+  border: 1.5px solid var(--accent, #38bdf8);
+  background: rgba(56, 189, 248, 0.06);
+  box-shadow: 0 0 0 100000px rgba(0, 0, 0, 0.45);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.snip-size-badge {
+  position: absolute;
+  transform: translateX(-50%);
+  background: var(--accent, #38bdf8);
+  color: #06283a;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 2;
+  white-space: nowrap;
+}
+.snip-hint {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 14, 22, 0.82);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 999px;
+  pointer-events: none;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+.snip-hint-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #38bdf8);
+  box-shadow: 0 0 8px var(--accent, #38bdf8);
+}
+.snip-cancel-btn {
+  pointer-events: auto;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.snip-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+}
+
+/* ==========================================================================
+   v1.5 — QR share modal
+   ========================================================================== */
+
+.qr-modal {
+  width: min(340px, calc(100vw - 48px));
+  max-height: calc(100vh - 60px);
+  overflow: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  animation: overlayIn 180ms var(--ease-out, ease);
+}
+.qr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+}
+.qr-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--text-1);
+}
+.qr-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 16px 4px;
+  text-align: center;
+}
+.qr-image {
+  width: 232px;
+  height: 232px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-1);
+  background: #fff;
+  padding: 8px;
+}
+.qr-skeleton {
+  width: 232px;
+  height: 232px;
+  border-radius: var(--radius-md);
+}
+.qr-error {
+  width: 232px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+.qr-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.qr-content {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-2xs);
+  color: var(--text-2);
+  text-align: start;
+  max-height: 84px;
+  overflow: auto;
+  word-break: break-all;
+}
+.qr-content-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-3);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.qr-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px 14px;
+}
+.qr-actions .btn { flex: 1; justify-content: center; }
+
+/* ==========================================================================
+   v1.5 — Merge modal
+   ========================================================================== */
+
+.merge-modal {
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 60px);
+  overflow: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  animation: overlayIn 180ms var(--ease-out, ease);
+}
+.merge-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+}
+.merge-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--text-1);
+}
+.merge-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 14px;
+}
+.merge-sep-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.merge-seps { flex-wrap: wrap; gap: 4px; }
+.merge-custom {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+}
+.merge-custom:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.merge-preview {
+  min-height: 96px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--text-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.merge-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px 14px;
+}
+.merge-actions .btn { flex: 1; justify-content: center; }
+
+/* ==========================================================================
+   v1.5 — Context menu transform groups
+   ========================================================================== */
+
+.ctx-group { padding: 3px 0; }
+.ctx-group + .ctx-group { border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05)); }
+.ctx-group-label {
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-3);
+  padding: 5px 14px 3px;
+}
+
+/* RTL: submenus open leftward by default via inset-inline-start, which pushes
+   them off-screen when the context menu is near the left edge — flip sides. */
+html[dir="rtl"] .ctx-submenu {
+  inset-inline-start: auto;
+  inset-inline-end: calc(100% + 4px);
+}
+
+/* Code content is always LTR (even in the Arabic RTL UI) and starts at the
+   beginning of each line, not at the inline-end edge. */
+.preview-code-viewer,
+.preview-code-viewer .code-content,
+.preview-code-viewer code {
+  direction: ltr;
+  text-align: left;
+}
+.preview-code-viewer .code-line-numbers {
+  direction: ltr;
+}

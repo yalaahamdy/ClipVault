@@ -314,6 +314,56 @@ const P: Record<string, JSX.Element> = {
       <path d="m9 12 2 2 4-4" />
     </>
   ),
+  // ---- v1.5 additions: snip / transforms / multi-select / QR / language / merge
+  crop: (
+    <>
+      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+      <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+    </>
+  ),
+  qr: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <path d="M14 14h3v3h-3zM21 14v.01M14 21v.01M17.5 17.5 21 17.5M21 21h-3" />
+    </>
+  ),
+  merge: (
+    <>
+      <path d="M8 6 2 12l6 6" />
+      <path d="M2 12h11" />
+      <path d="m16 3 5 5-5 5" />
+      <path d="m16 11 5 5-5 5" />
+      <path d="M21 8h-3a4 4 0 0 0-4 4" />
+      <path d="M21 16h-3a4 4 0 0 1-4-4" />
+    </>
+  ),
+  listChecks: (
+    <>
+      <path d="m3 5 1.5 1.5L7 4" />
+      <path d="m3 12 1.5 1.5L7 11" />
+      <path d="m3 19 1.5 1.5L7 18" />
+      <path d="M11 5h10M11 12h10M11 19h10" />
+    </>
+  ),
+  languages: (
+    <>
+      <path d="m5 8 6 6" />
+      <path d="m4 14 6-6 2-3" />
+      <path d="M2 5h12" />
+      <path d="M7 2h1" />
+      <path d="m22 22-5-10-5 10" />
+      <path d="M14 18h6" />
+    </>
+  ),
+  wand: (
+    <>
+      <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72" />
+      <path d="m14 7 3 3" />
+      <path d="M5 6v4M19 14v4M10 2v2M7 8H3M21 16h-4M11 3H9" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof P | string;

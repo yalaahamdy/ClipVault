@@ -13,6 +13,7 @@ import {
   isMarkdown,
 } from "../utils/codeHighlighter";
 import { renderMarkdown } from "../utils/markdown";
+import { useT } from "../i18n";
 
 interface Props {
   item: Item;
@@ -22,6 +23,8 @@ interface Props {
 const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif", ".bmp", ".ico"];
 
 export function Preview({ item, onClose }: Props) {
+  const t = useT();
+
   // --- Content Classification ---
   const textContent = (item.text ?? "").trim();
   const htmlContent = (item.html ?? "").trim();
@@ -218,24 +221,33 @@ export function Preview({ item, onClose }: Props) {
               <h3 className="preview-title">
                 {activeType === "image"
                   ? isFileImage && firstFile
-                    ? `معاينة صورة: ${firstFile.split(/[\\/]/).pop()}`
-                    : "معاينة الصورة بالحجم الكامل"
+                    ? t("preview.title.fileImage", { name: firstFile.split(/[\\/]/).pop() ?? "" })
+                    : t("preview.title.image")
                   : activeType === "html"
-                  ? "معاينة كود ومستند HTML"
+                  ? t("preview.title.html")
                   : activeType === "markdown"
-                  ? "معاينة مستند Markdown"
+                  ? t("preview.title.markdown")
                   : isJsonKind
-                  ? "معاينة بيانات JSON"
-                  : `معاينة كود (${lang.toUpperCase()})`}
+                  ? t("preview.title.json")
+                  : t("preview.title.code", { lang: lang.toUpperCase() })}
               </h3>
               <span className="preview-stats-hint">
                 {activeType === "image"
                   ? imageTab === "ocr"
-                    ? `${ocrLines.length} سطر • ${ocrText.trim().split(/\s+/).filter(Boolean).length} كلمة • ${ocrText.length} حرف`
+                    ? t("preview.stats.ocrHint", {
+                        lines: ocrLines.length,
+                        words: ocrText.trim().split(/\s+/).filter(Boolean).length,
+                        chars: ocrText.length,
+                      })
                     : imgMeta
-                    ? `${imgMeta.width} × ${imgMeta.height} px (${imgMeta.ratio}) • تكبير ${Math.round(zoom * 100)}%`
-                    : "صورة"
-                  : `${stats.lines} سطر • ${stats.words} كلمة • ${stats.kb} KB`}
+                    ? t("preview.stats.imageMeta", {
+                        w: imgMeta.width,
+                        h: imgMeta.height,
+                        ratio: imgMeta.ratio,
+                        zoom: Math.round(zoom * 100),
+                      })
+                    : t("preview.stats.image")
+                  : t("preview.stats.codeHint", { lines: stats.lines, words: stats.words, kb: stats.kb })}
               </span>
             </div>
           </div>
@@ -247,16 +259,16 @@ export function Preview({ item, onClose }: Props) {
                 <button
                   className={htmlTab === "preview" ? "on" : ""}
                   onClick={() => setHtmlTab("preview")}
-                  title="معاينة تفاعلية حية"
+                  title={t("preview.tabs.liveTitle")}
                 >
-                  <Icon name="eye" size={13} /> عرض حي
+                  <Icon name="eye" size={13} /> {t("preview.tabs.live")}
                 </button>
                 <button
                   className={htmlTab === "code" ? "on" : ""}
                   onClick={() => setHtmlTab("code")}
-                  title="الشفرة المصدرية"
+                  title={t("preview.tabs.codeTitle")}
                 >
-                  <Icon name="code" size={13} /> الشفرة
+                  <Icon name="code" size={13} /> {t("preview.tabs.code")}
                 </button>
               </div>
             )}
@@ -266,14 +278,14 @@ export function Preview({ item, onClose }: Props) {
                 <button
                   className={htmlViewport === "desktop" ? "on" : ""}
                   onClick={() => setHtmlViewport("desktop")}
-                  title="مقاس الحاسوب"
+                  title={t("preview.viewport.desktopTitle")}
                 >
                   <Icon name="monitor" size={13} />
                 </button>
                 <button
                   className={htmlViewport === "mobile" ? "on" : ""}
                   onClick={() => setHtmlViewport("mobile")}
-                  title="مقاس الهاتف (375px)"
+                  title={t("preview.viewport.mobileTitle")}
                 >
                   <Icon name="smartphone" size={13} />
                 </button>
@@ -284,9 +296,9 @@ export function Preview({ item, onClose }: Props) {
               <button
                 className={`top-control-btn${formattedHtml ? " warn" : ""}`}
                 onClick={() => setFormattedHtml(!formattedHtml)}
-                title="تنسيق وترتيب شفرة HTML تلقائياً"
+                title={t("preview.format.htmlTitle")}
               >
-                <Icon name="sparkles" size={13} /> {formattedHtml ? "الأصل" : "تنسيق HTML"}
+                <Icon name="sparkles" size={13} /> {formattedHtml ? t("preview.format.original") : t("preview.format.html")}
               </button>
             )}
 
@@ -295,16 +307,16 @@ export function Preview({ item, onClose }: Props) {
                 <button
                   className={mdTab === "rendered" ? "on" : ""}
                   onClick={() => setMdTab("rendered")}
-                  title="مستند منسق بالكامل"
+                  title={t("preview.tabs.renderedTitle")}
                 >
-                  <Icon name="fileText" size={13} /> منسق
+                  <Icon name="fileText" size={13} /> {t("preview.tabs.rendered")}
                 </button>
                 <button
                   className={mdTab === "raw" ? "on" : ""}
                   onClick={() => setMdTab("raw")}
-                  title="الشفرة الأصلية"
+                  title={t("preview.tabs.rawTitle")}
                 >
-                  <Icon name="code" size={13} /> خام
+                  <Icon name="code" size={13} /> {t("preview.tabs.raw")}
                 </button>
               </div>
             )}
@@ -313,9 +325,9 @@ export function Preview({ item, onClose }: Props) {
               <button
                 className={`top-control-btn${formattedJson ? " warn" : ""}`}
                 onClick={() => setFormattedJson(!formattedJson)}
-                title="تنسيق وترتيب JSON تلقائياً"
+                title={t("preview.format.jsonTitle")}
               >
-                <Icon name="sparkles" size={13} /> {formattedJson ? "الأصل" : "تنسيق JSON"}
+                <Icon name="sparkles" size={13} /> {formattedJson ? t("preview.format.original") : t("preview.format.json")}
               </button>
             )}
 
@@ -325,9 +337,9 @@ export function Preview({ item, onClose }: Props) {
               <button
                 className={`top-control-btn${wordWrap ? " warn" : ""}`}
                 onClick={() => setWordWrap(!wordWrap)}
-                title="تبديل التفاف الأسطر الطويلة"
+                title={t("preview.wrap.title")}
               >
-                <Icon name="columns" size={13} /> {wordWrap ? "أفقي" : "التفاف"}
+                <Icon name="columns" size={13} /> {wordWrap ? t("preview.wrap.off") : t("preview.wrap.on")}
               </button>
             )}
 
@@ -336,9 +348,9 @@ export function Preview({ item, onClose }: Props) {
                 <button
                   className={imageTab === "image" ? "on" : ""}
                   onClick={() => setImageTab("image")}
-                  title="معاينة الصورة بالحجم الكامل"
+                  title={t("preview.title.image")}
                 >
-                  <Icon name="image" size={13} /> الصورة
+                  <Icon name="image" size={13} /> {t("preview.tab.image")}
                 </button>
                 <button
                   className={imageTab === "ocr" ? "on" : ""}
@@ -348,9 +360,9 @@ export function Preview({ item, onClose }: Props) {
                       handleExtractOcr(false);
                     }
                   }}
-                  title="استخراج النص من الصورة بواسطة محرك OneOCR الاحترافي"
+                  title={t("preview.tab.ocrTitle")}
                 >
-                  <Icon name="scan" size={13} /> النص المستخرج (OCR)
+                  <Icon name="scan" size={13} /> {t("preview.tab.ocr")}
                 </button>
               </div>
             )}
@@ -361,9 +373,9 @@ export function Preview({ item, onClose }: Props) {
                   className="top-control-btn"
                   onClick={() => handleExtractOcr(true)}
                   disabled={isOcrLoading}
-                  title="إعادة فحص الصورة واستخراج النصوص مجدداً"
+                  title={t("preview.ocr.rescanTitle")}
                 >
-                  <Icon name="refresh" size={13} /> إعادة الفحص
+                  <Icon name="refresh" size={13} /> {t("preview.ocr.rescan")}
                 </button>
                 <button
                   className="top-control-btn"
@@ -375,25 +387,25 @@ export function Preview({ item, onClose }: Props) {
                     }
                   }}
                   disabled={!ocrText || isOcrLoading}
-                  title="نسخ النص المستخرج بالكامل"
+                  title={t("preview.ocr.copyTitle")}
                 >
-                  <Icon name={ocrCopied ? "check" : "copy"} size={13} /> {ocrCopied ? "تم النسخ" : "نسخ النص"}
+                  <Icon name={ocrCopied ? "check" : "copy"} size={13} /> {ocrCopied ? t("preview.copied") : t("preview.ocr.copyText")}
                 </button>
               </>
             )}
 
             {activeType === "image" && imageTab === "image" && (
               <div className="preview-img-toolbar">
-                <button className="icon-btn" onClick={zoomOut} title="تصغير (-)">
+                <button className="icon-btn" onClick={zoomOut} title={t("preview.zoom.outTitle")}>
                   <Icon name="zoomOut" size={15} />
                 </button>
-                <button className="btn-label" onClick={zoomReset} title="إعادة الضبط (100%)">
+                <button className="btn-label" onClick={zoomReset} title={t("preview.zoom.resetTitle")}>
                   {Math.round(zoom * 100)}%
                 </button>
-                <button className="icon-btn" onClick={zoomIn} title="تكبير (+)">
+                <button className="icon-btn" onClick={zoomIn} title={t("preview.zoom.inTitle")}>
                   <Icon name="zoomIn" size={15} />
                 </button>
-                <button className="icon-btn" onClick={rotateRight} title="تدوير 90°">
+                <button className="icon-btn" onClick={rotateRight} title={t("preview.zoom.rotateTitle")}>
                   <Icon name="rotate" size={14} />
                 </button>
                 <button
@@ -401,14 +413,14 @@ export function Preview({ item, onClose }: Props) {
                   onClick={() =>
                     setBgPattern((prev) => (prev === "grid" ? "dark" : prev === "dark" ? "light" : "grid"))
                   }
-                  title={`تبديل خلفية الشفافية (${bgPattern})`}
+                  title={t("preview.zoom.bgTitle", { pattern: bgPattern })}
                 >
                   <Icon name="grid" size={15} />
                 </button>
               </div>
             )}
 
-            <button className="preview-close-btn" onClick={onClose} title="إغلاق (Esc)">
+            <button className="preview-close-btn" onClick={onClose} title={t("preview.close.title")}>
               <Icon name="x" size={16} />
             </button>
           </div>
@@ -428,12 +440,12 @@ export function Preview({ item, onClose }: Props) {
               {imageError ? (
                 <div className="preview-error-box">
                   <Icon name="image" size={36} />
-                  <p>تعذر تحميل أو فك تشفير الصورة</p>
+                  <p>{t("preview.image.error")}</p>
                 </div>
               ) : imageUrl ? (
                 <img
                   src={imageUrl}
-                  alt="معاينة"
+                  alt={t("preview.image.alt")}
                   onLoad={onImgLoad}
                   style={{
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
@@ -456,39 +468,39 @@ export function Preview({ item, onClose }: Props) {
                     <div className="ocr-scanner-laser" />
                     <Icon name="scan" size={48} className="ocr-scanner-icon" />
                   </div>
-                  <h4>جارٍ فحص الصورة واستخراج النصوص...</h4>
-                  <p>يتم تحليل البكسلات محلياً عبر محرك OneOCR فائق السرعة والدقة</p>
+                  <h4>{t("preview.ocr.loadingTitle")}</h4>
+                  <p>{t("preview.ocr.loadingDesc")}</p>
                 </div>
               ) : ocrError ? (
                 <div className="preview-error-box">
                   <Icon name="shield" size={36} />
-                  <p>حدث خطأ أثناء استخراج النص: {ocrError}</p>
+                  <p>{t("preview.ocr.error", { error: ocrError })}</p>
                   <button className="btn" onClick={() => handleExtractOcr(true)} style={{ marginTop: 12 }}>
-                    إعادة المحاولة
+                    {t("preview.ocr.retry")}
                   </button>
                 </div>
               ) : !ocrText.trim() ? (
                 <div className="preview-ocr-empty">
                   <Icon name="scan" size={40} />
-                  <h4>لم يتم العثور على أي نصوص واضحة في هذه الصورة</h4>
-                  <p>تأكد من وضوح النص في الصورة ثم أعد الفحص إن لزم الأمر</p>
+                  <h4>{t("preview.ocr.emptyTitle")}</h4>
+                  <p>{t("preview.ocr.emptyDesc")}</p>
                   <button className="btn" onClick={() => handleExtractOcr(true)} style={{ marginTop: 12 }}>
-                    إعادة الفحص (Re-scan)
+                    {t("preview.ocr.rescanBtn")}
                   </button>
                 </div>
               ) : (
                 <div className="preview-ocr-content selectable">
                   <div className="preview-ocr-stats-bar">
                     <span>
-                      <strong>{ocrLines.length}</strong> سطر
+                      <strong>{ocrLines.length}</strong> {t("preview.stats.line")}
                     </span>
                     <span>•</span>
                     <span>
-                      <strong>{ocrText.trim().split(/\s+/).filter(Boolean).length}</strong> كلمة
+                      <strong>{ocrText.trim().split(/\s+/).filter(Boolean).length}</strong> {t("preview.stats.word")}
                     </span>
                     <span>•</span>
                     <span>
-                      <strong>{ocrText.length}</strong> حرف
+                      <strong>{ocrText.length}</strong> {t("preview.stats.char")}
                     </span>
                   </div>
                   <div className="preview-code-viewer selectable wrap-lines">
@@ -510,7 +522,7 @@ export function Preview({ item, onClose }: Props) {
           {activeType === "html" && htmlTab === "preview" && (
             <div className={`preview-html-frame-wrap viewport-${htmlViewport}`}>
               <iframe
-                title="معاينة HTML حية"
+                title={t("preview.html.iframeTitle")}
                 className="preview-html-iframe"
                 sandbox="allow-scripts allow-same-origin"
                 srcDoc={htmlContent || textContent}
@@ -552,7 +564,7 @@ export function Preview({ item, onClose }: Props) {
           <div className="preview-footer-left">
             <button className="btn primary" onClick={handleCopy}>
               <Icon name={copied ? "check" : "copy"} size={13} />
-              {copied ? "تم النسخ!" : "نسخ للمحفظة"}
+              {copied ? t("preview.copiedExcl") : t("preview.copy.toVault")}
             </button>
             {activeType === "image" && (
               <button
@@ -567,22 +579,22 @@ export function Preview({ item, onClose }: Props) {
                 }}
               >
                 <Icon name="scan" size={13} />
-                {imageTab === "image" ? "استخراج النص (OneOCR)" : "عرض الصورة"}
+                {imageTab === "image" ? t("preview.footer.extractOcr") : t("preview.footer.showImage")}
               </button>
             )}
             {activeType === "image" && item.kind === "image" && (
               <button className="btn" onClick={handleSaveImage}>
-                <Icon name="download" size={13} /> حفظ باسم…
+                <Icon name="download" size={13} /> {t("preview.footer.saveAs")}
               </button>
             )}
             <button className="btn" onClick={() => api.revealItem(item.id)}>
-              <Icon name="external" size={13} /> في المستكشف
+              <Icon name="external" size={13} /> {t("preview.footer.reveal")}
             </button>
           </div>
 
           <div className="preview-footer-right">
             <button className="btn" onClick={onClose}>
-              إغلاق (Esc)
+              {t("preview.close.title")}
             </button>
           </div>
         </div>

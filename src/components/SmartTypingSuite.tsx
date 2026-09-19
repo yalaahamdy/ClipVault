@@ -4,6 +4,7 @@ import { Icon } from "../icons";
 import { typingApi } from "../api";
 import { convertKeyboardLayout, looksLikeLayoutMismatch } from "../utils/keyboardLayout";
 import { checkSpelling, predictWords, SpellCheckResult, SpellIssue } from "../utils/spellChecker";
+import { useT } from "../i18n";
 
 interface SmartTypingSuiteProps {
   onNotify: (msg: string, err?: boolean) => void;
@@ -19,6 +20,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
   initialSpellText,
   onClearInitialSpellText,
 }) => {
+  const t = useT();
   const [activeTab, setActiveTab] = useState<SubTab>("layout");
 
   // ---------------- State: Layout Inverter ----------------
@@ -89,51 +91,51 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
       const text = await navigator.clipboard.readText();
       if (text) {
         setter(text);
-        onNotify(`تم لصق النص من الحافظة (${text.length} حرف)`);
+        onNotify(t("typing.notify.pastedFromClipboard", { n: text.length }));
       } else {
-        onNotify("الحافظة فارغة أو لا تحتوي على نص", true);
+        onNotify(t("typing.notify.clipboardEmptyNoText"), true);
       }
     } catch {
-      onNotify("تعذر القراءة من الحافظة تلقائياً", true);
+      onNotify(t("typing.notify.clipboardReadFail"), true);
     }
-  }, [onNotify]);
+  }, [onNotify, t]);
 
   const handlePasteAndInvert = useCallback(async () => {
     try {
       const text = await navigator.clipboard.readText();
       if (!text) {
-        onNotify("الحافظة فارغة", true);
+        onNotify(t("typing.notify.clipboardEmpty"), true);
         return;
       }
       setInputText(text);
       const { converted } = convertKeyboardLayout(text);
       setConvertedText(converted);
       await navigator.clipboard.writeText(converted);
-      onNotify("تم اللصق وعكس اللغة ونسخ النتيجة تلقائياً!");
+      onNotify(t("typing.notify.pasteInvertCopied"));
     } catch {
-      onNotify("تعذر قراءة الحافظة", true);
+      onNotify(t("typing.notify.clipboardReadFailShort"), true);
     }
-  }, [onNotify]);
+  }, [onNotify, t]);
 
-  const handleCopy = useCallback(async (textToCopy: string, label = "تم النسخ") => {
+  const handleCopy = useCallback(async (textToCopy: string, msg = t("typing.notify.copiedOk")) => {
     if (!textToCopy) return;
     try {
       await navigator.clipboard.writeText(textToCopy);
-      onNotify(`${label} بنجاح!`);
+      onNotify(msg);
     } catch {
-      onNotify("فشل النسخ إلى الحافظة", true);
+      onNotify(t("typing.notify.copyFail"), true);
     }
-  }, [onNotify]);
+  }, [onNotify, t]);
 
   const handleInjectIntoActiveApp = useCallback(async (textToInject: string) => {
     if (!textToInject) return;
     try {
       await typingApi.injectText(textToInject);
-      onNotify("تم اللصق في التطبيق النشط بنجاح!");
+      onNotify(t("typing.notify.injectedOk"));
     } catch (e) {
-      onNotify(`تعذر اللصق في التطبيق: ${String(e)}`, true);
+      onNotify(t("typing.notify.injectFail", { error: String(e) }), true);
     }
-  }, [onNotify]);
+  }, [onNotify, t]);
 
   const handleFixSelectedTextSystemWide = useCallback(async () => {
     setIsFixingSelection(true);
@@ -142,17 +144,21 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
       if (selected && selected.trim()) {
         setActiveTab("spellcheck");
         handleCheckSpelling(selected);
-        onNotify(`تم سحب النص المحدد (${selected.slice(0, 20)}${selected.length > 20 ? "..." : ""}) وتدقيقه`);
+        onNotify(t("typing.notify.selectionPulled", {
+          excerpt: selected.slice(0, 20) + (selected.length > 20 ? "..." : ""),
+        }));
       } else {
         const fixed = await typingApi.fixSelectedText();
-        onNotify(`تم تصحيح النص المحدد: "${fixed.slice(0, 25)}${fixed.length > 25 ? "..." : ""}"`);
+        onNotify(t("typing.notify.selectionFixed", {
+          excerpt: fixed.slice(0, 25) + (fixed.length > 25 ? "..." : ""),
+        }));
       }
     } catch (e) {
-      onNotify(String(e) || "تعذر تصحيح النص. حدد نصاً في أي برنامج ثم جرب ثانية.", true);
+      onNotify(String(e) || t("typing.notify.fixSelectionFail"), true);
     } finally {
       setIsFixingSelection(false);
     }
-  }, [onNotify]);
+  }, [onNotify, t]);
 
   // ---------------- Spell Checker Logic ----------------
   const handleCheckSpelling = useCallback((text: string) => {
@@ -181,13 +187,15 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
       setActiveTab("spellcheck");
       if (text) {
         handleCheckSpelling(text);
-        onNotify(`تم سحب النص المحدد (${text.slice(0, 20)}${text.length > 20 ? "..." : ""}) وتدقيقه بنجاح`);
+        onNotify(t("typing.notify.selectionPulledOk", {
+          excerpt: text.slice(0, 20) + (text.length > 20 ? "..." : ""),
+        }));
       }
     });
     return () => {
       unlisten.then((f) => f());
     };
-  }, [handleCheckSpelling, onNotify]);
+  }, [handleCheckSpelling, onNotify, t]);
 
   const handleApplySingleFix = (issue: SpellIssue, suggestion: string) => {
     if (!spellResult) return;
@@ -196,20 +204,20 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
       suggestion +
       spellInput.slice(issue.end);
     handleCheckSpelling(newText);
-    onNotify(`تم تصحيح "${issue.word}" ➔ "${suggestion}"`);
+    onNotify(t("typing.notify.issueFixed", { word: issue.word, sug: suggestion }));
   };
 
   const handleFixAllSpelling = useCallback(() => {
     if (!spellResult || spellResult.issues.length === 0) return;
     const fixed = spellResult.corrected;
     handleCheckSpelling(fixed);
-    onNotify(`تم تصحيح كافة الأخطاء (${spellResult.issues.length} خطأ)!`);
-  }, [spellResult, handleCheckSpelling, onNotify]);
+    onNotify(t("typing.notify.allFixed", { n: spellResult.issues.length }));
+  }, [spellResult, handleCheckSpelling, onNotify, t]);
 
   // Text-To-Speech function
   const handleSpeakText = useCallback((textToSpeak: string, lang = "ar-SA") => {
     if (!("speechSynthesis" in window)) {
-      onNotify("النطق الصوتي غير مدعوم في متصفحك الحالي", true);
+      onNotify(t("typing.notify.ttsUnsupported"), true);
       return;
     }
     if (isPlayingAudio) {
@@ -229,7 +237,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
     utterance.onerror = () => setIsPlayingAudio(false);
 
     window.speechSynthesis.speak(utterance);
-  }, [isPlayingAudio, onNotify]);
+  }, [isPlayingAudio, onNotify, t]);
 
   // ---------------- Voice Typing Logic ----------------
   useEffect(() => {
@@ -263,7 +271,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
 
     recognizer.onerror = (event: any) => {
       if (event.error !== "no-speech") {
-        onNotify(`تنبيه الإملاء الصوتي: ${event.error}`, true);
+        onNotify(t("typing.notify.dictationError", { error: event.error }), true);
       }
       setIsListening(false);
       clearInterval(timerIntervalRef.current);
@@ -281,11 +289,11 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
       try { recognizer.abort(); } catch { /* silent */ }
       clearInterval(timerIntervalRef.current);
     };
-  }, [voiceLang, onNotify]);
+  }, [voiceLang, onNotify, t]);
 
   const toggleVoiceListening = useCallback(() => {
     if (!recognitionRef.current) {
-      onNotify("الإملاء الصوتي غير مدعوم في بيئة التشغيل الحالية", true);
+      onNotify(t("typing.notify.sttUnsupported"), true);
       return;
     }
 
@@ -302,14 +310,14 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
         timerIntervalRef.current = setInterval(() => {
           setRecordingSeconds((prev) => prev + 1);
         }, 1000);
-        onNotify("جارٍ الاستماع... تحدث بوضوح عبر الميكروفون.");
+        onNotify(t("typing.notify.listeningToast"));
       } catch (err) {
-        onNotify("تعذر تشغيل الميكروفون. يرجى التحقق من أذونات الصوت.", true);
+        onNotify(t("typing.notify.micFail"), true);
         setIsListening(false);
         clearInterval(timerIntervalRef.current);
       }
     }
-  }, [isListening, voiceLang, onNotify]);
+  }, [isListening, voiceLang, onNotify, t]);
 
   // Format seconds to mm:ss
   const formatTimer = (sec: number) => {
@@ -358,7 +366,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
         }
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
           e.preventDefault();
-          if (convertedText) handleCopy(convertedText, "تم نسخ النتيجة المعكوسة");
+          if (convertedText) handleCopy(convertedText, t("typing.notify.copiedResultReversed"));
           return;
         }
       }
@@ -397,8 +405,10 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
     handleSwapLangs,
     spellInput,
     toggleVoiceListening,
+    t,
   ]);
 
+  // Demo layout-conversion samples — language data, intentionally left untranslated.
   const sampleInvertTexts = [
     { label: "hghsjo]hl ➔ الاستخدام", val: "hghsjo]hl" },
     { label: "صصصزلخخلمثزؤخة ➔ www.google.com", val: "صصصزلخخلمثزؤخة" },
@@ -415,8 +425,8 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             <Icon name="sparkles" size={14} />
           </div>
           <div className="typing-header-titles">
-            <span className="typing-main-heading">الكتابة والتدقيق الذكي</span>
-            <span className="typing-sub-heading">حلول الكتابة الفورية لنظام Windows</span>
+            <span className="typing-main-heading">{t("typing.header.title")}</span>
+            <span className="typing-sub-heading">{t("typing.header.subtitle")}</span>
           </div>
         </div>
 
@@ -424,32 +434,32 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
           className={`btn-quick-fix-selection ${isFixingSelection ? "loading" : ""}`}
           onClick={handleFixSelectedTextSystemWide}
           disabled={isFixingSelection}
-          title="تصحيح النص المحدد في أي تطبيق واستبداله فوراً (Ctrl+Shift+X)"
+          title={t("typing.header.quickFixTitle")}
         >
           <Icon name="sparkles" size={12} />
-          <span>تصحيح التحديد</span>
+          <span>{t("typing.actions.fixSelection")}</span>
           <kbd className="inline-kbd">Ctrl+Shift+X</kbd>
         </button>
       </header>
 
       {/* 2. Sub-Tab Segment Navigation */}
-      <nav className="mobile-segment-tabs" role="tablist" aria-label="أقسام الكتابة الذكية">
+      <nav className="mobile-segment-tabs" role="tablist" aria-label={t("typing.tabs.aria")}>
         <button
           className={`segment-btn ${activeTab === "layout" ? "active" : ""}`}
           onClick={() => setActiveTab("layout")}
-          title="عكس لغة لوحة المفاتيح (Alt+1)"
+          title={t("typing.tabs.layoutTitle")}
         >
           <Icon name="globe" size={13} />
-          <span>عكس اللغة</span>
+          <span>{t("typing.tabs.layout")}</span>
         </button>
 
         <button
           className={`segment-btn ${activeTab === "spellcheck" ? "active" : ""}`}
           onClick={() => setActiveTab("spellcheck")}
-          title="التدقيق اللغوي والإملائي (Alt+2)"
+          title={t("typing.tabs.spellTitle")}
         >
           <Icon name="check" size={13} />
-          <span>المدقق الإملائي</span>
+          <span>{t("typing.tabs.spell")}</span>
           {spellResult && spellResult.issues.length > 0 && (
             <span className="tab-pill-counter warn">{spellResult.issues.length}</span>
           )}
@@ -458,11 +468,11 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
         <button
           className={`segment-btn ${activeTab === "voice" ? "active" : ""}`}
           onClick={() => setActiveTab("voice")}
-          title="استوديو الإملاء الصوتي (Alt+3)"
+          title={t("typing.tabs.voiceTitle")}
         >
           <Icon name="microphone" size={13} />
-          <span>الإملاء الصوتي</span>
-          {isListening && <span className="tab-pill-counter live">نشط {formatTimer(recordingSeconds)}</span>}
+          <span>{t("typing.tabs.voice")}</span>
+          {isListening && <span className="tab-pill-counter live">{t("typing.tabs.liveBadge", { time: formatTimer(recordingSeconds) })}</span>}
         </button>
       </nav>
 
@@ -473,7 +483,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
           {predictions.length > 0 && (
             <div className="mobile-predictions-strip">
               <span className="predictions-tag">
-                <Icon name="sparkles" size={11} /> اقتراحات:
+                <Icon name="sparkles" size={11} /> {t("typing.layout.suggestions")}
               </span>
               <div className="predictions-scroll-row">
                 {predictions.map((word, idx) => (
@@ -494,27 +504,27 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             <div className="panel-bar-top">
               <div className="lang-indicator-pill">
                 <span className={`status-indicator ${sourceLang}`} />
-                <span>المُدخل: {sourceLang === "ar" ? "عربي" : "English"}</span>
+                <span>{t("typing.layout.inputLang", { lang: sourceLang === "ar" ? "عربي" : "English" })}</span>
                 {looksLikeLayoutMismatch(inputText) && (
                   <span className="mismatch-warning-tag">
-                    <Icon name="alertTriangle" size={11} /> لغة معكوسة!
+                    <Icon name="alertTriangle" size={11} /> {t("typing.layout.mismatchTag")}
                   </span>
                 )}
               </div>
               <div className="panel-actions-row">
                 <button
                   className="mini-action-pill"
-                  onClick={() => handlePasteFromClipboard(setInputText, "حقل الإدخال")}
-                  title="لصق من الحافظة"
+                  onClick={() => handlePasteFromClipboard(setInputText, t("typing.layout.pasteTargetInput"))}
+                  title={t("typing.actions.pasteTitle")}
                 >
                   <Icon name="clipboard" size={11} />
-                  <span>لصق</span>
+                  <span>{t("typing.actions.paste")}</span>
                 </button>
                 {inputText && (
                   <button
                     className="mini-icon-btn"
                     onClick={() => setInputText("")}
-                    title="مسح الحقل"
+                    title={t("typing.actions.clearFieldTitle")}
                   >
                     <Icon name="trash" size={12} />
                   </button>
@@ -524,7 +534,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
 
             <textarea
               className="mobile-smart-textarea"
-              placeholder="اكتب هنا بحروف مقلوبة مثل: 'hghsjo]hl' أو 'صصصزلخخلمثزؤخة'..."
+              placeholder={t("typing.layout.inputPlaceholder")}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               dir="auto"
@@ -532,9 +542,9 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             />
 
             <div className="panel-bar-bottom">
-              <span className="count-label">{inputText.length} حرف</span>
+              <span className="count-label">{t("typing.layout.charCount", { n: inputText.length })}</span>
               <div className="samples-wrap">
-                <span className="samples-lbl">نماذج:</span>
+                <span className="samples-lbl">{t("typing.layout.samplesLabel")}</span>
                 {sampleInvertTexts.slice(0, 3).map((sample, idx) => (
                   <button
                     key={idx}
@@ -554,10 +564,10 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             <button
               className="btn-quick-paste-invert"
               onClick={handlePasteAndInvert}
-              title="قراءة الحافظة وعكس لغتها وحفظ النتيجة فوراً بضغطة واحدة"
+              title={t("typing.layout.pasteInvertTitle")}
             >
               <Icon name="refresh" size={13} />
-              <span>⚡ لصق وعكس فوري من الحافظة</span>
+              <span>{t("typing.layout.pasteInvert")}</span>
             </button>
           </div>
 
@@ -566,12 +576,12 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             <button
               className="btn-round-swap"
               onClick={handleSwapLangs}
-              title="تبديل اتجاه التحويل يدويًا (Alt+S)"
+              title={t("typing.layout.swapTitle")}
             >
               <Icon name="refresh" size={14} />
             </button>
             <span className="swap-label">
-              {sourceLang === "ar" ? "عربي ➔ إنجليزي" : "English ➔ عربي"}
+              {sourceLang === "ar" ? t("typing.layout.swapToEn") : t("typing.layout.swapToAr")}
             </span>
           </div>
 
@@ -580,26 +590,26 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             <div className="panel-bar-top">
               <div className="lang-indicator-pill">
                 <span className={`status-indicator ${targetLang}`} />
-                <span>النتيجة المعكوسة: {targetLang === "ar" ? "عربي" : "English"}</span>
+                <span>{t("typing.layout.outputLang", { lang: targetLang === "ar" ? "عربي" : "English" })}</span>
               </div>
               <div className="panel-actions-row">
                 {convertedText && (
                   <>
                     <button
                       className="pill-action-btn primary"
-                      onClick={() => handleCopy(convertedText, "تم نسخ النتيجة")}
-                      title="نسخ النتيجة (Ctrl+Enter)"
+                      onClick={() => handleCopy(convertedText, t("typing.notify.copiedResult"))}
+                      title={t("typing.layout.copyResultTitle")}
                     >
                       <Icon name="copy" size={12} />
-                      <span>نسخ</span>
+                      <span>{t("typing.actions.copy")}</span>
                     </button>
                     <button
                       className="pill-action-btn accent"
                       onClick={() => handleInjectIntoActiveApp(convertedText)}
-                      title="لصق في التطبيق النشط فوراً (Shift+Enter)"
+                      title={t("typing.layout.injectTitle")}
                     >
                       <Icon name="monitor" size={12} />
-                      <span>لصق بالتطبيق</span>
+                      <span>{t("typing.actions.inject")}</span>
                     </button>
                   </>
                 )}
@@ -608,7 +618,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
 
             <textarea
               className="mobile-smart-textarea output"
-              placeholder="النتيجة المعكوسة ستظهر هنا لحظياً..."
+              placeholder={t("typing.layout.outputPlaceholder")}
               value={convertedText}
               readOnly
               dir="auto"
@@ -625,7 +635,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                   }}
                 >
                   <Icon name="check" size={12} />
-                  <span>تدقيق هذه النتيجة إملائياً في المدقق ➔</span>
+                  <span>{t("typing.layout.sendToChecker")}</span>
                 </button>
               </div>
             )}
@@ -641,32 +651,32 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             <div className="panel-bar-top">
               <div className="panel-title-group">
                 <Icon name="edit" size={13} />
-                <span>محرر التدقيق اللغوي</span>
+                <span>{t("typing.spell.editorTitle")}</span>
               </div>
               <div className="panel-actions-row">
                 <button
                   className="mini-action-pill"
-                  onClick={() => handlePasteFromClipboard(handleCheckSpelling, "محرر التدقيق")}
-                  title="لصق نص من الحافظة وتدقيقه"
+                  onClick={() => handlePasteFromClipboard(handleCheckSpelling, t("typing.spell.pasteTargetEditor"))}
+                  title={t("typing.spell.pasteCheckTitle")}
                 >
                   <Icon name="clipboard" size={11} />
-                  <span>لصق وتدقيق</span>
+                  <span>{t("typing.spell.pasteCheck")}</span>
                 </button>
                 {spellResult && spellResult.issues.length > 0 && (
                   <button
                     className="pill-action-btn magic pulse-btn"
                     onClick={handleFixAllSpelling}
-                    title="تصحيح كافة الأخطاء المكتشفة بنقرة واحدة (Ctrl+Enter)"
+                    title={t("typing.spell.fixAllTitle")}
                   >
                     <Icon name="sparkles" size={12} />
-                    <span>تصحيح الكل ({spellResult.issues.length})</span>
+                    <span>{t("typing.spell.fixAll", { n: spellResult.issues.length })}</span>
                   </button>
                 )}
                 {spellInput && (
                   <button
                     className="mini-icon-btn"
                     onClick={() => handleCheckSpelling("")}
-                    title="مسح الحقل"
+                    title={t("typing.actions.clearFieldTitle")}
                   >
                     <Icon name="trash" size={12} />
                   </button>
@@ -676,7 +686,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
 
             <textarea
               className="mobile-smart-textarea spell-text"
-              placeholder="الصق أو اكتب النص لتدقيقه... مثلاً: 'شكرن جزيلن تم إستدعاء احمد حتي نصل الي حل جدن ممتز'"
+              placeholder={t("typing.spell.placeholder")}
               value={spellInput}
               onChange={(e) => handleCheckSpelling(e.target.value)}
               dir="auto"
@@ -684,32 +694,32 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
 
             <div className="panel-bar-bottom">
               <div className="spell-counts">
-                <span>الكلمات: <b>{spellResult?.wordCount || 0}</b></span>
-                <span>الملاحظات: <b className={spellResult && spellResult.issues.length > 0 ? "warn-text" : ""}>{spellResult?.issues.length || 0}</b></span>
+                <span>{t("typing.spell.wordsLabel")} <b>{spellResult?.wordCount || 0}</b></span>
+                <span>{t("typing.spell.issuesLabel")} <b className={spellResult && spellResult.issues.length > 0 ? "warn-text" : ""}>{spellResult?.issues.length || 0}</b></span>
               </div>
               {spellInput && (
                 <div className="panel-actions-row">
                   <button
                     className="pill-action-btn"
                     onClick={() => handleSpeakText(spellInput)}
-                    title="الاستماع إلى نطق النص"
+                    title={t("typing.actions.speakTitle")}
                   >
                     <Icon name={isPlayingAudio ? "pause" : "volume-2"} size={11} />
-                    <span>{isPlayingAudio ? "إيقاف" : "نطق"}</span>
+                    <span>{isPlayingAudio ? t("typing.actions.stopSpeak") : t("typing.actions.speak")}</span>
                   </button>
                   <button
                     className="pill-action-btn"
-                    onClick={() => handleCopy(spellInput, "تم نسخ النص المصحح")}
+                    onClick={() => handleCopy(spellInput, t("typing.notify.copiedCorrectedText"))}
                   >
                     <Icon name="copy" size={11} />
-                    <span>نسخ</span>
+                    <span>{t("typing.actions.copy")}</span>
                   </button>
                   <button
                     className="pill-action-btn accent"
                     onClick={() => handleInjectIntoActiveApp(spellInput)}
                   >
                     <Icon name="monitor" size={11} />
-                    <span>لصق بالتطبيق</span>
+                    <span>{t("typing.actions.inject")}</span>
                   </button>
                 </div>
               )}
@@ -721,7 +731,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             <div className="panel-bar-top">
               <div className="panel-title-group">
                 <Icon name="info" size={13} />
-                <span>تقرير السلامة اللغوية</span>
+                <span>{t("typing.spell.reportTitle")}</span>
               </div>
               {spellResult && (
                 <div
@@ -735,7 +745,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                         : "var(--danger)",
                   }}
                 >
-                  سلامة النص: {spellResult.score}%
+                  {t("typing.spell.scoreLabel", { n: spellResult.score })}
                 </div>
               )}
             </div>
@@ -747,14 +757,14 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                   className={`filter-chip ${selectedIssueFilter === "all" ? "active" : ""}`}
                   onClick={() => setSelectedIssueFilter("all")}
                 >
-                  الكل ({spellResult.issues.length})
+                  {t("typing.spell.filterAll", { n: spellResult.issues.length })}
                 </button>
                 {spellResult.categoriesCount.hamza > 0 && (
                   <button
                     className={`filter-chip ${selectedIssueFilter === "hamza" ? "active" : ""}`}
                     onClick={() => setSelectedIssueFilter("hamza")}
                   >
-                    الهمزات ({spellResult.categoriesCount.hamza})
+                    {t("typing.spell.filterHamza", { n: spellResult.categoriesCount.hamza })}
                   </button>
                 )}
                 {spellResult.categoriesCount.ta_marbuta > 0 && (
@@ -762,7 +772,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                     className={`filter-chip ${selectedIssueFilter === "ta_marbuta" ? "active" : ""}`}
                     onClick={() => setSelectedIssueFilter("ta_marbuta")}
                   >
-                    التاء المربوطة ({spellResult.categoriesCount.ta_marbuta})
+                    {t("typing.spell.filterTaMarbuta", { n: spellResult.categoriesCount.ta_marbuta })}
                   </button>
                 )}
                 {spellResult.categoriesCount.tanwin > 0 && (
@@ -770,7 +780,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                     className={`filter-chip ${selectedIssueFilter === "tanwin" ? "active" : ""}`}
                     onClick={() => setSelectedIssueFilter("tanwin")}
                   >
-                    التنوين ({spellResult.categoriesCount.tanwin})
+                    {t("typing.spell.filterTanwin", { n: spellResult.categoriesCount.tanwin })}
                   </button>
                 )}
                 {spellResult.categoriesCount.punctuation > 0 && (
@@ -778,7 +788,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                     className={`filter-chip ${selectedIssueFilter === "punctuation" ? "active" : ""}`}
                     onClick={() => setSelectedIssueFilter("punctuation")}
                   >
-                    الترقيم ({spellResult.categoriesCount.punctuation})
+                    {t("typing.spell.filterPunctuation", { n: spellResult.categoriesCount.punctuation })}
                   </button>
                 )}
                 {spellResult.categoriesCount.typo > 0 && (
@@ -786,7 +796,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                     className={`filter-chip ${selectedIssueFilter === "typo" ? "active" : ""}`}
                     onClick={() => setSelectedIssueFilter("typo")}
                   >
-                    أخطاء شائعة ({spellResult.categoriesCount.typo})
+                    {t("typing.spell.filterTypo", { n: spellResult.categoriesCount.typo })}
                   </button>
                 )}
               </div>
@@ -797,11 +807,11 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                 {spellResult.issues.length === 0 ? (
                   <div className="compact-clean-msg">
                     <Icon name="check-circle" size={24} />
-                    <span>النص سليم وخالٍ تماماً من الأخطاء الإملائية المكتشفة!</span>
+                    <span>{t("typing.spell.cleanMsg")}</span>
                   </div>
                 ) : filteredIssues.length === 0 ? (
                   <div className="compact-empty-msg">
-                    <span>لا توجد أخطاء في هذا التصنيف المحدد.</span>
+                    <span>{t("typing.spell.filterEmpty")}</span>
                   </div>
                 ) : (
                   filteredIssues.map((issue) => (
@@ -815,7 +825,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                               key={sIdx}
                               className="btn-apply-suggestion"
                               onClick={() => handleApplySingleFix(issue, sug)}
-                              title="انقر لتطبيق هذا التصحيح في النص"
+                              title={t("typing.spell.applySuggestionTitle")}
                             >
                               <span>{sug}</span>
                               <Icon name="check" size={10} />
@@ -830,7 +840,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
               </div>
             ) : (
               <div className="compact-empty-msg">
-                <span>اكتب أو الصق نصاً في المحرر أعلاه لبدء الفحص التلقائي الفوري.</span>
+                <span>{t("typing.spell.emptyHint")}</span>
               </div>
             )}
           </div>
@@ -845,7 +855,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
             <div className="panel-bar-top">
               <div className="panel-title-group">
                 <Icon name="microphone" size={13} />
-                <span>استوديو الإملاء الصوتي</span>
+                <span>{t("typing.voice.studioTitle")}</span>
               </div>
               <div className="voice-lang-picker">
                 <select
@@ -854,9 +864,9 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                   onChange={(e) => setVoiceLang(e.target.value as any)}
                   disabled={isListening}
                 >
-                  <option value="ar-SA">العربية (السعودية / فصحى)</option>
-                  <option value="ar-EG">العربية (مصر)</option>
-                  <option value="en-US">English (US)</option>
+                  <option value="ar-SA">{t("typing.voice.langArSA")}</option>
+                  <option value="ar-EG">{t("typing.voice.langArEG")}</option>
+                  <option value="en-US">{t("typing.voice.langEnUS")}</option>
                 </select>
               </div>
             </div>
@@ -867,7 +877,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                 <button
                   className={`mobile-big-mic ${isListening ? "active-listening" : ""}`}
                   onClick={toggleVoiceListening}
-                  title={isListening ? "إيقاف الاستماع (Ctrl+M)" : "بدء التسجيل الصوتي (Ctrl+M)"}
+                  title={isListening ? t("typing.voice.micStopTitle") : t("typing.voice.micStartTitle")}
                 >
                   <Icon name={isListening ? "pause" : "microphone"} size={26} />
                 </button>
@@ -875,8 +885,8 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
               <div className="mic-status-container">
                 <span className="mic-hint-label">
                   {isListening
-                    ? `جارٍ الاستماع... (${formatTimer(recordingSeconds)})`
-                    : "انقر على الميكروفون لبدء الإملاء (Ctrl+M)"}
+                    ? t("typing.voice.listeningStatus", { time: formatTimer(recordingSeconds) })
+                    : t("typing.voice.micIdleHint")}
                 </span>
                 {isListening && (
                   <div className="audio-bars-sim">
@@ -903,7 +913,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                 <span className="interim-transcript">{interimTranscript}</span>
               ) : (
                 <span className="transcript-placeholder">
-                  تحدث عبر الميكروفون وسيتم تفريغ كلامك هنا بدقة متناهية...
+                  {t("typing.voice.transcriptPlaceholder")}
                 </span>
               )}
             </div>
@@ -915,7 +925,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                   <button
                     className="mini-icon-btn"
                     onClick={() => setVoiceTranscript("")}
-                    title="مسح الحقل"
+                    title={t("typing.actions.clearFieldTitle")}
                   >
                     <Icon name="trash" size={12} />
                   </button>
@@ -923,24 +933,24 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                     <button
                       className="pill-action-btn"
                       onClick={() => handleSpeakText(voiceTranscript, voiceLang)}
-                      title="الاستماع إلى نطق النص"
+                      title={t("typing.actions.speakTitle")}
                     >
                       <Icon name={isPlayingAudio ? "pause" : "volume-2"} size={11} />
-                      <span>{isPlayingAudio ? "إيقاف" : "نطق"}</span>
+                      <span>{isPlayingAudio ? t("typing.actions.stopSpeak") : t("typing.actions.speak")}</span>
                     </button>
                     <button
                       className="pill-action-btn primary"
-                      onClick={() => handleCopy(voiceTranscript, "تم نسخ النص المفرغ")}
+                      onClick={() => handleCopy(voiceTranscript, t("typing.notify.copiedTranscription"))}
                     >
                       <Icon name="copy" size={11} />
-                      <span>نسخ</span>
+                      <span>{t("typing.actions.copy")}</span>
                     </button>
                     <button
                       className="pill-action-btn accent"
                       onClick={() => handleInjectIntoActiveApp(voiceTranscript)}
                     >
                       <Icon name="monitor" size={11} />
-                      <span>لصق بالتطبيق</span>
+                      <span>{t("typing.actions.inject")}</span>
                     </button>
                     <button
                       className="pill-action-btn"
@@ -949,15 +959,15 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                         handleCheckSpelling(voiceTranscript);
                         setActiveTab("spellcheck");
                       }}
-                      title="تدقيق النص المفرغ إملائياً"
+                      title={t("typing.voice.proofreadTranscriptTitle")}
                     >
                       <Icon name="check" size={11} />
-                      <span>تدقيق</span>
+                      <span>{t("typing.voice.proofread")}</span>
                     </button>
                   </div>
                 </>
               ) : (
-                <span className="empty-hint">اضغط الميكروفون أو اختصار Ctrl+M للتحدث</span>
+                <span className="empty-hint">{t("typing.voice.emptyHint")}</span>
               )}
             </div>
           </div>
@@ -967,13 +977,13 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
       {/* 6. Mobile Shortcuts Quick Footer */}
       <footer className="mobile-shortcuts-footer">
         <div className="shortcut-chip-item">
-          <kbd>Ctrl+Shift+X</kbd> <span>تصحيح التحديد</span>
+          <kbd>Ctrl+Shift+X</kbd> <span>{t("typing.actions.fixSelection")}</span>
         </div>
         <div className="shortcut-chip-item">
-          <kbd>Ctrl+↵</kbd> <span>نسخ / تصحيح الكل</span>
+          <kbd>Ctrl+↵</kbd> <span>{t("typing.footer.copyFixAll")}</span>
         </div>
         <div className="shortcut-chip-item">
-          <kbd>Shift+↵</kbd> <span>لصق بالتطبيق</span>
+          <kbd>Shift+↵</kbd> <span>{t("typing.actions.inject")}</span>
         </div>
       </footer>
     </div>

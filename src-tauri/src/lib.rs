@@ -7,6 +7,8 @@ mod db;
 mod models;
 mod monitor;
 mod ocr;
+mod qr;
+mod snip;
 mod typing;
 mod vault;
 
@@ -31,6 +33,10 @@ pub struct AppState {
     pub tray_pause_item: Mutex<Option<MenuItem<tauri::Wry>>>,
     pub tray_autostart_item: Mutex<Option<CheckMenuItem<tauri::Wry>>>,
     pub vault_key: Mutex<Option<[u8; 32]>>,
+    /// Pending region-screenshot session (v1.5).
+    pub snip: snip::SharedSession,
+    /// The user-configured main popup shortcut, used to route shortcut presses.
+    pub main_shortcut: Mutex<String>,
 }
 
 impl AppState {
@@ -57,11 +63,34 @@ pub fn run() {
                 .with_handler(|app, shortcut, event| {
                     use tauri_plugin_global_shortcut::ShortcutState;
                     if event.state == ShortcutState::Pressed {
+                        // Route by the shortcut's final key token ("shift" contains
+                        // both "s" and "h", so substring matching would misfire).
                         let sc_str = format!("{shortcut}");
-                        if sc_str.to_lowercase().contains("x") {
-                            let selected_text = crate::typing::get_selected_text_from_active_window();
+                        let token = sc_str
+                            .to_lowercase()
+                            .rsplit('+')
+                            .next()
+                            .unwrap_or("")
+                            .trim()
+                            .to_string();
+                        let is_main = {
+                            let state = app.state::<AppState>();
+                            let main = state
+                                .main_shortcut
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .clone();
+                            sc_str.to_lowercase() == main.to_lowercase()
+                        };
+                        if is_main {
+                            show_popup(app);
+                        } else if token == "x" {
+                            let selected_text =
+                                crate::typing::get_selected_text_from_active_window();
                             show_popup_force(app);
                             let _ = app.emit("clipvault:open-spellcheck-with-text", selected_text);
+                        } else if token == "s" {
+                            let _ = crate::snip::begin_snip(app);
                         } else {
                             show_popup(app);
                         }
@@ -122,6 +151,12 @@ pub fn run() {
             commands::typing_fix_selected_text,
             commands::typing_inject_text,
             commands::typing_get_selected_text,
+            commands::add_text_item,
+            commands::qr_generate,
+            snip::snip_begin,
+            snip::snip_get_frame,
+            snip::snip_commit,
+            snip::snip_cancel,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -146,6 +181,8 @@ pub fn run() {
                 tray_pause_item: Mutex::new(None),
                 tray_autostart_item: Mutex::new(None),
                 vault_key: Mutex::new(None),
+                snip: Mutex::new(None),
+                main_shortcut: Mutex::new(shortcut.clone()),
             });
 
             setup_tray(&handle)
@@ -186,15 +223,30 @@ pub fn run() {
         .expect("فشل تشغيل ClipVault");
 }
 
-/// Register (or re-register) the global shortcut.
+/// Register (or re-register) the global shortcuts.
 pub fn register_shortcut(app: &AppHandle, shortcut_str: &str) -> Result<(), String> {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
     gs.register(shortcut_str)
         .map_err(|e| format!("تعذر تسجيل الاختصار {shortcut_str}: {e}"))?;
-    // Register global selection typing fixer (Ctrl+Shift+X)
+
+    // Remember which shortcut is the main popup toggle (routing in the handler).
+    {
+        let state = app.state::<AppState>();
+        *state
+            .main_shortcut
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = shortcut_str.to_string();
+    }
+
+    // Register global selection typing fixer (Ctrl+Shift+X).
     let _ = gs.register("Ctrl+Shift+X");
+    // Register global region-screenshot snip (Ctrl+Shift+S) — unless it collides.
+    let norm = shortcut_str.replace(' ', "").to_lowercase();
+    if norm != "ctrl+shift+s" {
+        let _ = gs.register("Ctrl+Shift+S");
+    }
     Ok(())
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../icons";
 import { api, vaultApi } from "../api";
+import { useI18n } from "../i18n";
 import type {
   PasswordGeneratorOptions,
   VaultAuditReport,
@@ -21,6 +22,8 @@ interface PasswordVaultProps {
 }
 
 export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProps) {
+  const { t, lang } = useI18n();
+
   // Vault state
   const [status, setStatus] = useState<VaultStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +98,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
       setPinInput("");
       const list = await vaultApi.getItems();
       setItems(list);
-      onNotify("تم فتح خزينة كلمات المرور بأمان");
+      onNotify(t("vault.toast.unlocked"));
     } catch (err) {
       setPinError(String(err));
     }
@@ -105,11 +108,11 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
   const handleSetup = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (pinInput.length < 4) {
-      setPinError("يجب أن يتكون رمز المرور من 4 خانات على الأقل");
+      setPinError(t("vault.error.pinShort"));
       return;
     }
     if (pinInput !== confirmPinInput) {
-      setPinError("رمزا المرور غير متطابقين");
+      setPinError(t("vault.error.pinMismatch"));
       return;
     }
     setPinError(null);
@@ -120,7 +123,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
       setConfirmPinInput("");
       const list = await vaultApi.getItems();
       setItems(list);
-      onNotify("تم إنشاء وتأمين القبو بنجاح!");
+      onNotify(t("vault.toast.setupDone"));
     } catch (err) {
       setPinError(String(err));
     }
@@ -133,7 +136,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
       setStatus(s);
       setItems([]);
       setRevealedIds(new Set());
-      onNotify("تم قفل الخزينة بنجاح");
+      onNotify(t("vault.toast.locked"));
     } catch (err) {
       onNotify(String(err), true);
     }
@@ -153,14 +156,14 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
   const copySecret = async (secret: string, label: string) => {
     try {
       await navigator.clipboard.writeText(secret);
-      onNotify(`تم نسخ ${label} (سيُمسح من الحافظة بعد 30 ثانية للأمان)`);
+      onNotify(t("vault.toast.copied", { label }));
 
       // Set auto-clear
       setTimeout(() => {
         vaultApi.clearSecretFromClipboard(secret).catch(() => {});
       }, 30000);
     } catch {
-      onNotify("فشل في نسخ النص", true);
+      onNotify(t("vault.toast.copyFailed"), true);
     }
   };
 
@@ -178,11 +181,11 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
 
   // Delete item
   const handleDeleteItem = async (id: number) => {
-    if (!confirm("هل أنت متأكد من رغبتك في حذف هذا العنصر نهائياً؟")) return;
+    if (!confirm(t("vault.confirm.delete"))) return;
     try {
       await vaultApi.deleteItem(id);
       setItems((prev) => prev.filter((it) => it.id !== id));
-      onNotify("تم حذف العنصر بنجاح");
+      onNotify(t("vault.toast.deleted"));
     } catch (err) {
       onNotify(String(err), true);
     }
@@ -192,7 +195,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem || !editingItem.title.trim()) {
-      onNotify("يرجى إدخال عنوان للعنصر", true);
+      onNotify(t("vault.toast.titleRequired"), true);
       return;
     }
     try {
@@ -208,7 +211,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
       });
       setEditModalOpen(false);
       setEditingItem(null);
-      onNotify("تم حفظ بيانات الحساب بنجاح");
+      onNotify(t("vault.toast.saved"));
     } catch (err) {
       onNotify(String(err), true);
     }
@@ -236,7 +239,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
       a.download = `ClipVault_Chrome_Passwords_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      onNotify("تم تصدير كلمات المرور بصيغة Chrome CSV بنجاح!");
+      onNotify(t("vault.toast.exported"));
     } catch (err) {
       onNotify(String(err), true);
     }
@@ -267,7 +270,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
       const list = await vaultApi.getItems();
       setItems(list);
       setImportModalOpen(false);
-      onNotify(`تم بنجاح استيراد وتشفير ${count} حساباً من Chrome Passwords.csv!`);
+      onNotify(t("vault.toast.importedChrome", { count }));
     } catch (err) {
       onNotify(String(err), true);
     } finally {
@@ -289,7 +292,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
         const list = await vaultApi.getItems();
         setItems(list);
         setImportModalOpen(false);
-        onNotify(`تم بنجاح استيراد وتشفير ${count} حساباً من ملف CSV!`);
+        onNotify(t("vault.toast.importedCsv", { count }));
       } catch (err) {
         onNotify(String(err), true);
       } finally {
@@ -335,7 +338,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
     return (
       <div className="vault-loading-container">
         <div className="vault-spinner" />
-        <span>جارٍ تجهيز الخزينة المشفرة...</span>
+        <span>{t("vault.loading")}</span>
       </div>
     );
   }
@@ -350,18 +353,18 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
           <div className="vault-lock-icon setup-glow">
             <Icon name="shieldCheck" size={44} />
           </div>
-          <h2 className="vault-lock-title">إنشاء خزينة كلمات المرور</h2>
+          <h2 className="vault-lock-title">{t("vault.setup.title")}</h2>
           <p className="vault-lock-desc">
-            قم بتعيين رمز مرور رئيسي (PIN أو كلمة سر). تُشفر بياناتك محلياً 100% بخوارزمية{" "}
-            <strong>AES-256-GCM</strong> ولا يمكن لأحد فتحها بدون هذا الرمز.
+            {t("vault.setup.desc1")}{" "}
+            <strong>AES-256-GCM</strong> {t("vault.setup.desc2")}
           </p>
 
           <form onSubmit={handleSetup} className="vault-form">
             <div className="vault-input-group">
-              <label>رمز المرور الرئيسي الجديد</label>
+              <label>{t("vault.setup.newPin")}</label>
               <input
                 type="password"
-                placeholder="أدخل 4 خانات على الأقل..."
+                placeholder={t("vault.setup.newPinPh")}
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 autoFocus
@@ -370,10 +373,10 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
             </div>
 
             <div className="vault-input-group">
-              <label>تأكيد رمز المرور</label>
+              <label>{t("vault.setup.confirmPin")}</label>
               <input
                 type="password"
-                placeholder="أعد إدخال الرمز لتأكيده..."
+                placeholder={t("vault.setup.confirmPinPh")}
                 value={confirmPinInput}
                 onChange={(e) => setConfirmPinInput(e.target.value)}
                 className="vault-text-input"
@@ -384,7 +387,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
 
             <button type="submit" className="vault-primary-btn">
               <Icon name="lock" size={16} />
-              <span>تأمين وإنشاء الخزينة</span>
+              <span>{t("vault.setup.cta")}</span>
             </button>
           </form>
         </div>
@@ -402,16 +405,16 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
           <div className="vault-lock-icon locked-glow">
             <Icon name="lock" size={40} />
           </div>
-          <h2 className="vault-lock-title">الخزينة مقفلة بأمان</h2>
+          <h2 className="vault-lock-title">{t("vault.lock.title")}</h2>
           <p className="vault-lock-desc">
-            أدخل رمز المرور لفك تشفير وعرض حساباتك وكلمات مرورك المحمية.
+            {t("vault.lock.desc")}
           </p>
 
           <form onSubmit={handleUnlock} className="vault-form">
             <div className="vault-input-group">
               <input
                 type="password"
-                placeholder="أدخل رمز المرور..."
+                placeholder={t("vault.lock.pinPh")}
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 autoFocus
@@ -423,12 +426,12 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
 
             <button type="submit" className="vault-primary-btn">
               <Icon name="unlock" size={16} />
-              <span>فتح الخزينة</span>
+              <span>{t("vault.lock.cta")}</span>
             </button>
           </form>
 
           <div className="vault-lock-stats">
-            <span>محفوظات مشفرة: {status.totalItems} عنصر</span>
+            <span>{t("vault.lock.stats", { count: status.totalItems })}</span>
           </div>
         </div>
       </div>
@@ -446,13 +449,13 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
           <Icon name="search" size={15} className="vault-search-ico" />
           <input
             type="text"
-            placeholder="بحث في الحسابات، المواقع، الملاحظات..."
+            placeholder={t("vault.action.searchPh")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="vault-search-input"
           />
           {query && (
-            <button className="vault-clear-search" onClick={() => setQuery("")} title="مسح">
+            <button className="vault-clear-search" onClick={() => setQuery("")} title={t("vault.action.clearTitle")}>
               <Icon name="x" size={13} />
             </button>
           )}
@@ -472,19 +475,19 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
             });
             setEditModalOpen(true);
           }}
-          title="إضافة حساب أو بطاقة جديدة"
+          title={t("vault.action.newTitle")}
         >
           <Icon name="plus" size={15} />
-          <span>عنصر جديد</span>
+          <span>{t("vault.action.new")}</span>
         </button>
 
         <button
           className="vault-lock-quick-btn"
           onClick={handleLock}
-          title="قفل الخزينة فوراً"
+          title={t("vault.action.lockTitle")}
         >
           <Icon name="lock" size={13} />
-          <span>قفل</span>
+          <span>{t("vault.action.lock")}</span>
         </button>
       </div>
 
@@ -501,50 +504,50 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
         <button
           className={`chip${categoryFilter === "all" ? " active" : ""}`}
           onClick={() => setCategoryFilter("all")}
-          title="عرض كافة العناصر المحفوظة"
+          title={t("vault.cat.allTitle")}
         >
           <Icon name="grid" size={12} />
-          <span>الكل</span>
+          <span>{t("vault.cat.all")}</span>
           <span className="chip-counter">{items.length}</span>
         </button>
 
         <button
           className={`chip${categoryFilter === "login" ? " active" : ""}`}
           onClick={() => setCategoryFilter("login")}
-          title="حسابات ومواقع الويب"
+          title={t("vault.cat.loginTitle")}
         >
           <Icon name="key" size={12} />
-          <span>حسابات</span>
+          <span>{t("vault.cat.login")}</span>
           <span className="chip-counter">{items.filter((i) => i.category === "login").length}</span>
         </button>
 
         <button
           className={`chip${categoryFilter === "card" ? " active" : ""}`}
           onClick={() => setCategoryFilter("card")}
-          title="بطاقات الدفع والائتمان"
+          title={t("vault.cat.cardTitle")}
         >
           <Icon name="creditCard" size={12} />
-          <span>بطاقات دفع</span>
+          <span>{t("vault.cat.card")}</span>
           <span className="chip-counter">{items.filter((i) => i.category === "card").length}</span>
         </button>
 
         <button
           className={`chip${categoryFilter === "note" ? " active" : ""}`}
           onClick={() => setCategoryFilter("note")}
-          title="ملاحظات سرية وبيانات خاصة"
+          title={t("vault.cat.noteTitle")}
         >
           <Icon name="fileText" size={12} />
-          <span>ملاحظات سرية</span>
+          <span>{t("vault.cat.note")}</span>
           <span className="chip-counter">{items.filter((i) => i.category === "note").length}</span>
         </button>
 
         <button
           className={`chip${categoryFilter === "favorite" ? " active" : ""}`}
           onClick={() => setCategoryFilter("favorite")}
-          title="العناصر المفضلة"
+          title={t("vault.cat.favTitle")}
         >
           <Icon name="star" size={12} filled={categoryFilter === "favorite"} />
-          <span>المفضلة</span>
+          <span>{t("vault.cat.fav")}</span>
           <span className="chip-counter">{items.filter((i) => i.favorite).length}</span>
         </button>
 
@@ -556,37 +559,37 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
             triggerGenerate();
             setGeneratorOpen(true);
           }}
-          title="مولد كلمات مرور قوية وعبارات سرية"
+          title={t("vault.tool.genTitle")}
         >
           <Icon name="sparkles" size={12} />
-          <span>مولد المرور</span>
+          <span>{t("vault.tool.gen")}</span>
         </button>
 
         <button
           className="chip vault-tool-chip"
           onClick={handleOpenAudit}
-          title="فحص أمان وصحة كلمات المرور وكشف المكرر والضعيف"
+          title={t("vault.tool.auditTitle")}
         >
           <Icon name="shield" size={12} />
-          <span>فحص الأمان</span>
+          <span>{t("vault.tool.audit")}</span>
         </button>
 
         <button
           className="chip vault-tool-chip"
           onClick={() => setImportModalOpen(true)}
-          title="استيراد كلمات المرور من Chrome أو ملف CSV"
+          title={t("vault.tool.importTitle")}
         >
           <Icon name="upload" size={12} />
-          <span>استيراد CSV</span>
+          <span>{t("vault.tool.import")}</span>
         </button>
 
         <button
           className="chip vault-tool-chip"
           onClick={handleExportCsv}
-          title="تصدير كلمات المرور بصيغة Chrome CSV"
+          title={t("vault.tool.exportTitle")}
         >
           <Icon name="download" size={12} />
-          <span>تصدير CSV</span>
+          <span>{t("vault.tool.export")}</span>
         </button>
       </nav>
 
@@ -596,11 +599,11 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
           <div className="vault-empty-icon">
             <Icon name="shield" size={44} />
           </div>
-          <h3>{query ? "لا توجد نتائج مطابقة لبحثك" : "لا توجد عناصر في هذا القسم بعد"}</h3>
+          <h3>{query ? t("vault.empty.noResults") : t("vault.empty.none")}</h3>
           <p>
             {query
-              ? "جرّب كلمات بحث أخرى أو امسح الفلتر"
-              : "اضغط على «عنصر جديد» لإضافة وتأمين أول حساب أو بطاقة في الخزينة."}
+              ? t("vault.empty.noResultsHint")
+              : t("vault.empty.hint")}
           </p>
         </div>
       ) : (
@@ -633,8 +636,8 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                           <span>{it.username}</span>
                           <button
                             className="vault-inline-copy"
-                            onClick={() => copySecret(it.username!, "اسم المستخدم")}
-                            title="نسخ اسم المستخدم"
+                            onClick={() => copySecret(it.username!, t("vault.label.username"))}
+                            title={t("vault.card.copyUsername")}
                           >
                             <Icon name="copy" size={11} />
                           </button>
@@ -647,7 +650,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                     <button
                       className={`vault-icon-btn${it.favorite ? " is-fav" : ""}`}
                       onClick={() => handleToggleFavorite(it.id)}
-                      title={it.favorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"}
+                      title={it.favorite ? t("vault.card.unfavorite") : t("vault.card.favorite")}
                     >
                       <Icon name="star" size={14} filled={it.favorite} />
                     </button>
@@ -655,7 +658,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                       <button
                         className="vault-icon-btn"
                         onClick={() => api.openExternalUrl(it.website!)}
-                        title="فتح الموقع في المتصفح"
+                        title={t("vault.card.openWebsite")}
                       >
                         <Icon name="external" size={13} />
                       </button>
@@ -673,14 +676,14 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                       <button
                         className="vault-icon-btn"
                         onClick={() => toggleReveal(it.id)}
-                        title={isRevealed ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                        title={isRevealed ? t("vault.card.hidePassword") : t("vault.card.showPassword")}
                       >
                         <Icon name={isRevealed ? "eyeOff" : "eye"} size={13} />
                       </button>
                       <button
                         className="vault-icon-btn"
-                        onClick={() => copySecret(it.password!, "كلمة المرور")}
-                        title="نسخ كلمة المرور بأمان"
+                        onClick={() => copySecret(it.password!, t("vault.label.password"))}
+                        title={t("vault.card.copyPassword")}
                       >
                         <Icon name="copy" size={13} />
                       </button>
@@ -696,19 +699,19 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                         <span>{isRevealed ? it.cardNumber : "•••• •••• •••• " + it.cardNumber.slice(-4)}</span>
                         <button
                           className="vault-inline-copy"
-                          onClick={() => copySecret(it.cardNumber!, "رقم البطاقة")}
+                          onClick={() => copySecret(it.cardNumber!, t("vault.label.cardNumber"))}
                         >
                           <Icon name="copy" size={11} />
                         </button>
                       </div>
                     )}
                     <div className="vault-card-meta-row">
-                      {it.cardExpiry && <span>الانتهاء: {it.cardExpiry}</span>}
+                      {it.cardExpiry && <span>{t("vault.card.expiry", { value: it.cardExpiry })}</span>}
                       {it.cardCvv && <span>CVV: {isRevealed ? it.cardCvv : "•••"}</span>}
                       <button
                         className="vault-icon-btn"
                         onClick={() => toggleReveal(it.id)}
-                        title={isRevealed ? "إخفاء" : "إظهار"}
+                        title={isRevealed ? t("vault.card.hide") : t("vault.card.show")}
                       >
                         <Icon name={isRevealed ? "eyeOff" : "eye"} size={12} />
                       </button>
@@ -733,14 +736,14 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                         }}
                       />
                     </div>
-                    <span style={{ color: strength.color }}>{strength.label}</span>
+                    <span style={{ color: strength.color }}>{t(strength.labelKey)}</span>
                   </div>
                 )}
 
                 {/* Footer Controls */}
                 <div className="vault-card-footer">
                   <span className="vault-card-date">
-                    {new Date(it.updatedAt).toLocaleDateString("ar-EG")}
+                    {new Date(it.updatedAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}
                   </span>
                   <div className="vault-footer-btns">
                     <button
@@ -761,15 +764,15 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                         });
                         setEditModalOpen(true);
                       }}
-                      title="تعديل بيانات الحساب"
+                      title={t("vault.card.editTitle")}
                     >
                       <Icon name="edit" size={12} />
-                      <span>تعديل</span>
+                      <span>{t("vault.card.edit")}</span>
                     </button>
                     <button
                       className="vault-sm-btn danger"
                       onClick={() => handleDeleteItem(it.id)}
-                      title="حذف العنصر"
+                      title={t("vault.card.deleteTitle")}
                     >
                       <Icon name="trash" size={12} />
                     </button>
@@ -788,7 +791,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
         <div className="vault-modal-backdrop animate-in" onClick={() => setEditModalOpen(false)}>
           <div className="vault-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="vault-modal-header">
-              <h3>{editingItem.id ? "تعديل العنصر المحمي" : "إضافة عنصر جديد في الخزينة"}</h3>
+              <h3>{editingItem.id ? t("vault.edit.titleEdit") : t("vault.edit.titleNew")}</h3>
               <button className="vault-modal-close" onClick={() => setEditModalOpen(false)}>
                 <Icon name="x" size={16} />
               </button>
@@ -797,7 +800,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
             <form onSubmit={handleSaveItem} className="vault-modal-body">
               {/* Category Selector */}
               <div className="vault-form-row">
-                <label>نوع العنصر</label>
+                <label>{t("vault.edit.type")}</label>
                 <div className="vault-cat-toggle-row">
                   <button
                     type="button"
@@ -805,7 +808,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                     onClick={() => setEditingItem({ ...editingItem, category: "login" })}
                   >
                     <Icon name="key" size={13} />
-                    <span>حساب موقع / تطبيق</span>
+                    <span>{t("vault.edit.catLogin")}</span>
                   </button>
                   <button
                     type="button"
@@ -813,7 +816,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                     onClick={() => setEditingItem({ ...editingItem, category: "card" })}
                   >
                     <Icon name="creditCard" size={13} />
-                    <span>بطاقة دفع</span>
+                    <span>{t("vault.edit.catCard")}</span>
                   </button>
                   <button
                     type="button"
@@ -821,17 +824,17 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                     onClick={() => setEditingItem({ ...editingItem, category: "note" })}
                   >
                     <Icon name="fileText" size={13} />
-                    <span>ملاحظة مشفرة</span>
+                    <span>{t("vault.edit.catNote")}</span>
                   </button>
                 </div>
               </div>
 
               {/* Title Field */}
               <div className="vault-form-row">
-                <label>العنوان / اسم الخدمة *</label>
+                <label>{t("vault.edit.titleLabel")}</label>
                 <input
                   type="text"
-                  placeholder="مثال: Google, GitHub, Netflix..."
+                  placeholder={t("vault.edit.titlePh")}
                   value={editingItem.title}
                   onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })}
                   required
@@ -843,7 +846,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
               {editingItem.category === "login" && (
                 <>
                   <div className="vault-form-row">
-                    <label>اسم المستخدم / البريد الإلكتروني</label>
+                    <label>{t("vault.edit.username")}</label>
                     <input
                       type="text"
                       placeholder="user@example.com"
@@ -855,23 +858,23 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
 
                   <div className="vault-form-row">
                     <div className="vault-row-between">
-                      <label>كلمة المرور</label>
+                      <label>{t("vault.edit.password")}</label>
                       <button
                         type="button"
                         className="vault-link-btn"
                         onClick={() => {
                           const generated = generatePassword(genOpts);
                           setEditingItem({ ...editingItem, password: generated });
-                          onNotify("تم توليد كلمة مرور قوية وتعبئتها");
+                          onNotify(t("vault.toast.generated"));
                         }}
                       >
                         <Icon name="sparkles" size={11} />
-                        <span>توليد كلمة قوية</span>
+                        <span>{t("vault.edit.generate")}</span>
                       </button>
                     </div>
                     <input
                       type="text"
-                      placeholder="أدخل كلمة المرور أو ولّد واحدة قوية..."
+                      placeholder={t("vault.edit.passwordPh")}
                       value={editingItem.password ?? ""}
                       onChange={(e) => setEditingItem({ ...editingItem, password: e.target.value })}
                       className="vault-text-input"
@@ -879,7 +882,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                   </div>
 
                   <div className="vault-form-row">
-                    <label>رابط الموقع (اختياري)</label>
+                    <label>{t("vault.edit.website")}</label>
                     <input
                       type="url"
                       placeholder="https://example.com/login"
@@ -895,7 +898,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
               {editingItem.category === "card" && (
                 <>
                   <div className="vault-form-row">
-                    <label>رقم البطاقة</label>
+                    <label>{t("vault.edit.cardNumber")}</label>
                     <input
                       type="text"
                       placeholder="0000 0000 0000 0000"
@@ -906,7 +909,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                   </div>
                   <div className="vault-form-two-col">
                     <div className="vault-form-row">
-                      <label>تاريخ الانتهاء</label>
+                      <label>{t("vault.edit.cardExpiry")}</label>
                       <input
                         type="text"
                         placeholder="MM/YY"
@@ -916,7 +919,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                       />
                     </div>
                     <div className="vault-form-row">
-                      <label>رمز الأمان (CVV)</label>
+                      <label>{t("vault.edit.cardCvv")}</label>
                       <input
                         type="password"
                         placeholder="123"
@@ -932,9 +935,9 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
 
               {/* Notes Field */}
               <div className="vault-form-row">
-                <label>ملاحظات مشفرة إضافية (اختياري)</label>
+                <label>{t("vault.edit.notes")}</label>
                 <textarea
-                  placeholder="أي معلومات حساسة أخرى..."
+                  placeholder={t("vault.edit.notesPh")}
                   value={editingItem.notes ?? ""}
                   onChange={(e) => setEditingItem({ ...editingItem, notes: e.target.value })}
                   className="vault-textarea"
@@ -945,11 +948,11 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
               {/* Modal Buttons */}
               <div className="vault-modal-footer">
                 <button type="button" className="vault-btn" onClick={() => setEditModalOpen(false)}>
-                  إلغاء
+                  {t("vault.edit.cancel")}
                 </button>
                 <button type="submit" className="vault-btn vault-btn-primary">
                   <Icon name="check" size={14} />
-                  <span>حفظ العنصر المشفر</span>
+                  <span>{t("vault.edit.save")}</span>
                 </button>
               </div>
             </form>
@@ -964,7 +967,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
         <div className="vault-modal-backdrop animate-in" onClick={() => setGeneratorOpen(false)}>
           <div className="vault-modal-box gen-modal" onClick={(e) => e.stopPropagation()}>
             <div className="vault-modal-header">
-              <h3>مولد كلمات المرور الاحترافي</h3>
+              <h3>{t("vault.gen.title")}</h3>
               <button className="vault-modal-close" onClick={() => setGeneratorOpen(false)}>
                 <Icon name="x" size={16} />
               </button>
@@ -975,13 +978,13 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
               <div className="vault-gen-result-box">
                 <div className="vault-gen-string">{generatedPass}</div>
                 <div className="vault-gen-actions">
-                  <button className="vault-icon-btn" onClick={triggerGenerate} title="إعادة التوليد">
+                  <button className="vault-icon-btn" onClick={triggerGenerate} title={t("vault.gen.regenerate")}>
                     <Icon name="refresh" size={16} />
                   </button>
                   <button
                     className="vault-icon-btn primary"
-                    onClick={() => copySecret(generatedPass, "كلمة المرور المولدة")}
-                    title="نسخ فوري"
+                    onClick={() => copySecret(generatedPass, t("vault.label.generated"))}
+                    title={t("vault.gen.copyNow")}
                   >
                     <Icon name="copy" size={16} />
                   </button>
@@ -997,7 +1000,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                     setGeneratedPass(generatePassword(genOpts));
                   }}
                 >
-                  أحرف ورموز عشوائية
+                  {t("vault.gen.modeRandom")}
                 </button>
                 <button
                   className={`vault-cat-choice${genMode === "passphrase" ? " active" : ""}`}
@@ -1006,7 +1009,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                     setGeneratedPass(generatePassphrase(4));
                   }}
                 >
-                  عبارة مرور سهلة الحفظ
+                  {t("vault.gen.modePassphrase")}
                 </button>
               </div>
 
@@ -1015,7 +1018,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                   {/* Length Slider */}
                   <div className="vault-slider-row">
                     <div className="vault-row-between">
-                      <label>الطول: {genOpts.length} حرفاً</label>
+                      <label>{t("vault.gen.length", { count: genOpts.length })}</label>
                     </div>
                     <input
                       type="range"
@@ -1043,7 +1046,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                           setGeneratedPass(generatePassword(next));
                         }}
                       />
-                      <span>أحرف كبيرة (A-Z)</span>
+                      <span>{t("vault.gen.uppercase")}</span>
                     </label>
                     <label className="vault-check-label">
                       <input
@@ -1055,7 +1058,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                           setGeneratedPass(generatePassword(next));
                         }}
                       />
-                      <span>أحرف صغيرة (a-z)</span>
+                      <span>{t("vault.gen.lowercase")}</span>
                     </label>
                     <label className="vault-check-label">
                       <input
@@ -1067,7 +1070,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                           setGeneratedPass(generatePassword(next));
                         }}
                       />
-                      <span>أرقام (0-9)</span>
+                      <span>{t("vault.gen.numbers")}</span>
                     </label>
                     <label className="vault-check-label">
                       <input
@@ -1079,7 +1082,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                           setGeneratedPass(generatePassword(next));
                         }}
                       />
-                      <span>رموز خاصة (!@#$%)</span>
+                      <span>{t("vault.gen.symbols")}</span>
                     </label>
                     <label className="vault-check-label">
                       <input
@@ -1091,16 +1094,16 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                           setGeneratedPass(generatePassword(next));
                         }}
                       />
-                      <span>تجنب الرموز المتشابهة (0, O, l, 1)</span>
+                      <span>{t("vault.gen.avoidAmbiguous")}</span>
                     </label>
                   </div>
                 </>
               ) : (
                 <div className="vault-passphrase-info">
-                  <p>تتكون عبارة المرور من 4 كلمات بالإنجليزية يسهل تذكرها مع فواصل آمنة.</p>
+                  <p>{t("vault.gen.passphraseInfo")}</p>
                   <button className="vault-btn" onClick={() => setGeneratedPass(generatePassphrase(4))}>
                     <Icon name="refresh" size={13} />
-                    <span>توليد عبارة جديدة</span>
+                    <span>{t("vault.gen.newPassphrase")}</span>
                   </button>
                 </div>
               )}
@@ -1110,12 +1113,12 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                   type="button"
                   className="vault-btn vault-btn-primary"
                   onClick={() => {
-                    copySecret(generatedPass, "كلمة المرور");
+                    copySecret(generatedPass, t("vault.label.password"));
                     setGeneratorOpen(false);
                   }}
                 >
                   <Icon name="copy" size={14} />
-                  <span>نسخ وإغلاق</span>
+                  <span>{t("vault.gen.copyClose")}</span>
                 </button>
               </div>
             </div>
@@ -1130,7 +1133,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
         <div className="vault-modal-backdrop animate-in" onClick={() => setAuditModalOpen(false)}>
           <div className="vault-modal-box audit-modal" onClick={(e) => e.stopPropagation()}>
             <div className="vault-modal-header">
-              <h3>تقرير فحص أمان كلمات المرور</h3>
+              <h3>{t("vault.audit.title")}</h3>
               <button className="vault-modal-close" onClick={() => setAuditModalOpen(false)}>
                 <Icon name="x" size={16} />
               </button>
@@ -1140,23 +1143,23 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
               <div className="vault-audit-summary-grid">
                 <div className="vault-audit-card strong">
                   <div className="audit-num">{auditReport.strongCount}</div>
-                  <div className="audit-label">كلمات قوية وآمنة</div>
+                  <div className="audit-label">{t("vault.audit.strong")}</div>
                 </div>
                 <div className="vault-audit-card weak">
                   <div className="audit-num">{auditReport.weakCount}</div>
-                  <div className="audit-label">كلمات ضعيفة</div>
+                  <div className="audit-label">{t("vault.audit.weak")}</div>
                 </div>
                 <div className="vault-audit-card reused">
                   <div className="audit-num">{auditReport.reusedCount}</div>
-                  <div className="audit-label">كلمات مكررة</div>
+                  <div className="audit-label">{t("vault.audit.reused")}</div>
                 </div>
               </div>
 
               {auditReport.weakCount === 0 && auditReport.reusedCount === 0 ? (
                 <div className="vault-audit-perfect">
                   <Icon name="shieldCheck" size={40} />
-                  <h4>خزينتك بأعلى درجات الأمان!</h4>
-                  <p>جميع كلمات مرورك قوية، فريدة، وغير مكررة عبر أي حسابات.</p>
+                  <h4>{t("vault.audit.perfectTitle")}</h4>
+                  <p>{t("vault.audit.perfectDesc")}</p>
                 </div>
               ) : (
                 <div className="vault-audit-alerts">
@@ -1164,7 +1167,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                     <div className="vault-audit-alert weak">
                       <Icon name="alertTriangle" size={16} />
                       <span>
-                        لديك <strong>{auditReport.weakCount}</strong> كلمة مرور ضعيفة يُنصح بتغييرها فوراً.
+                        {t("vault.audit.weakPre")} <strong>{auditReport.weakCount}</strong> {t("vault.audit.weakPost")}
                       </span>
                     </div>
                   )}
@@ -1172,7 +1175,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                     <div className="vault-audit-alert reused">
                       <Icon name="alertTriangle" size={16} />
                       <span>
-                        لديك <strong>{auditReport.reusedCount}</strong> حساباً يستخدم نفس كلمة المرور!
+                        {t("vault.audit.reusePre")} <strong>{auditReport.reusedCount}</strong> {t("vault.audit.reusePost")}
                       </span>
                     </div>
                   )}
@@ -1185,7 +1188,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                   className="vault-btn vault-btn-primary"
                   onClick={() => setAuditModalOpen(false)}
                 >
-                  فهمت ذلك
+                  {t("vault.audit.gotIt")}
                 </button>
               </div>
             </div>
@@ -1200,7 +1203,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
         <div className="vault-modal-backdrop animate-in" onClick={() => !importing && setImportModalOpen(false)}>
           <div className="vault-modal-box import-modal" onClick={(e) => e.stopPropagation()}>
             <div className="vault-modal-header">
-              <h3>استيراد كلمات المرور من Chrome أو ملف CSV</h3>
+              <h3>{t("vault.import.title")}</h3>
               <button className="vault-modal-close" onClick={() => !importing && setImportModalOpen(false)}>
                 <Icon name="x" size={16} />
               </button>
@@ -1212,8 +1215,8 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                 <div className="vault-import-head">
                   <div className="vault-type-badge"><Icon name="key" size={14} /></div>
                   <div className="vault-import-info">
-                    <h4>ملف Chrome Passwords المكتشف</h4>
-                    <p>عُثر على ملف "Chrome Passwords.csv" في مجلد المشروع.</p>
+                    <h4>{t("vault.import.foundTitle")}</h4>
+                    <p>{t("vault.import.foundDesc")}</p>
                   </div>
                 </div>
                 <button
@@ -1222,12 +1225,12 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                   disabled={importing}
                 >
                   <Icon name="upload" size={13} />
-                  <span>{importing ? "جارٍ الاستيراد والتشفير..." : "استيراد الحسابات الآن"}</span>
+                  <span>{importing ? t("vault.import.importing") : t("vault.import.importNow")}</span>
                 </button>
               </div>
 
               <div className="vault-import-divider">
-                <span>أو اختر ملف CSV من جهازك</span>
+                <span>{t("vault.import.divider")}</span>
               </div>
 
               {/* Option B: Custom File Upload */}
@@ -1242,8 +1245,8 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                 />
                 <label htmlFor="csv-file-input" className="vault-file-dropzone">
                   <Icon name="upload" size={24} />
-                  <span>اضغط لاختيار ملف .csv من المتصفح أو مدير كلمات المرور</span>
-                  <span className="sub-hint">يدعم Google Chrome, Brave, Edge, 1Password CSV</span>
+                  <span>{t("vault.import.dropzone")}</span>
+                  <span className="sub-hint">{t("vault.import.supports")}</span>
                 </label>
               </div>
 
@@ -1254,7 +1257,7 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                   onClick={() => setImportModalOpen(false)}
                   disabled={importing}
                 >
-                  إغلاق
+                  {t("vault.import.close")}
                 </button>
               </div>
             </div>

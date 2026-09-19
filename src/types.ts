@@ -166,4 +166,48 @@ export interface OcrResult {
   lines: OcrLine[];
 }
 
+// ---- v1.5: screenshot snip ----------------------------------------------------
+
+/** Frozen monitor frame shown behind the region-selection overlay. */
+export interface SnipFrame {
+  /** PNG data URL of the full monitor capture */
+  dataUrl: string;
+  /** Physical pixel size of the captured buffer */
+  width: number;
+  height: number;
+  /** Monitor origin in virtual-screen physical coordinates */
+  monitorX: number;
+  monitorY: number;
+}
+
+/** Region selected by the user, in CSS pixels relative to the snip window. */
+export interface SnipRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** window.devicePixelRatio of the snip window (maps CSS px → physical px) */
+  dpr: number;
+}
+
+export interface SnipCommitResult {
+  id: number;
+  hasOcrText: boolean;
+  ocrText: string | null;
+}
+
+export interface Settings {
+  theme: string;
+  globalShortcut: string;
+  retentionDays: string;
+  maxItems: string;
+  excludedApps: string;
+  autoMask: string;
+  firstRun: string;
+  autostart: string;
+  paused: string;
+  /** v1.5 — UI language: "ar" (default) | "en" */
+  lang?: string;
+}
+
 

@@ -3,6 +3,7 @@ import type { Item, Settings, Stats } from "../types";
 import { api } from "../api";
 import { APP_VERSION } from "../version";
 import { Icon } from "../icons";
+import { fmtNum, useT } from "../i18n";
 
 interface Props {
   settings: Settings | null;
@@ -15,6 +16,7 @@ interface Props {
   onToggleTheme: () => void;
   onClearHistory: () => void;
   onNotify?: (msg: string, err?: boolean) => void;
+  onSnip?: () => void;
 }
 
 export function HomeView({
@@ -28,7 +30,9 @@ export function HomeView({
   onToggleTheme,
   onClearHistory,
   onNotify,
+  onSnip,
 }: Props) {
+  const t = useT();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [recentItem, setRecentItem] = useState<Item | null>(null);
@@ -75,12 +79,12 @@ export function HomeView({
       await api.copyItem(recentItem.id);
       setCopiedRecent(true);
       if (onNotify) {
-        onNotify("تم نسخ العنصر الأخير إلى الحافظة بنجاح");
+        onNotify(t("home.copyOk"));
       }
       setTimeout(() => setCopiedRecent(false), 1600);
     } catch {
       if (onNotify) {
-        onNotify("تعذر نسخ العنصر", true);
+        onNotify(t("home.copyFail"), true);
       }
     }
   };
@@ -102,7 +106,7 @@ export function HomeView({
               <span className="hub-title">ClipVault</span>
               <span className="hub-badge-v">v{APP_VERSION}</span>
             </div>
-            <span className="hub-tagline">مدير الحافظة والكتابة الذكية المحلي</span>
+            <span className="hub-tagline">{t("home.tagline")}</span>
           </div>
         </div>
 
@@ -110,13 +114,13 @@ export function HomeView({
         <button
           className={`hub-status-pill ${paused ? "paused" : "active"}`}
           onClick={onTogglePause}
-          title={paused ? "انقر لاستئناف تسجيل الحافظة" : "انقر لإيقاف التسجيل مؤقتاً"}
+          title={paused ? t("home.statusResume") : t("home.statusPause")}
         >
           <span className="hub-status-pulse" />
           <span className="hub-status-text">
-            {paused ? "المراقب متوقف" : "المراقب نشط"}
+            {paused ? t("home.monitorPaused") : t("home.monitorActive")}
           </span>
-          <span className="hub-status-action">{paused ? "تشغيل" : "إيقاف"}</span>
+          <span className="hub-status-action">{paused ? t("home.start") : t("home.stop")}</span>
         </button>
       </header>
 
@@ -135,13 +139,13 @@ export function HomeView({
           </div>
           <div className="card-info">
             <div className="card-heading-row">
-              <h3 className="card-title">سجل الحافظة</h3>
+              <h3 className="card-title">{t("home.clipboardTitle")}</h3>
               <span className="card-shortcut-chip">Enter ↵</span>
             </div>
             <p className="card-desc">
               {loadingStats
-                ? "جاري تحميل السجل…"
-                : `${stats?.total.toLocaleString("ar-EG") ?? 0} عنصر محفوظ للبحث والنسخ الفوري`}
+                ? t("home.clipboardLoading")
+                : t("home.clipboardDesc", { n: stats ? fmtNum(stats.total, "ar") : "0" })}
             </p>
           </div>
           <div className="card-arrow">
@@ -163,11 +167,11 @@ export function HomeView({
             </div>
             <div className="card-info">
               <div className="card-heading-row">
-                <h3 className="card-title">الكتابة والتدقيق الذكي</h3>
+                <h3 className="card-title">{t("home.typingTitle")}</h3>
                 <span className="card-shortcut-chip">Ctrl+Shift+X</span>
               </div>
               <p className="card-desc">
-                عكس اللغة التلقائي، التدقيق الإملائي الفوري، والإملاء الصوتي
+                {t("home.typingDesc")}
               </p>
             </div>
             <div className="card-arrow">
@@ -190,11 +194,38 @@ export function HomeView({
             </div>
             <div className="card-info">
               <div className="card-heading-row">
-                <h3 className="card-title">خزينة كلمات المرور</h3>
+                <h3 className="card-title">{t("home.vaultTitle")}</h3>
                 <span className="card-shortcut-chip">Ctrl+3</span>
               </div>
               <p className="card-desc">
-                تشفير محلي عسكري ومولد كلمات مرور آمنة 100%
+                {t("home.vaultDesc")}
+              </p>
+            </div>
+            <div className="card-arrow">
+              <Icon name="chevronRight" size={16} />
+            </div>
+          </div>
+        )}
+
+        {/* Card 4 (v1.5): Region screenshot → OCR text */}
+        {onSnip && (
+          <div
+            className="launchpad-card snip"
+            onClick={onSnip}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="card-accent-bar" />
+            <div className="card-icon-wrap snip">
+              <Icon name="crop" size={20} />
+            </div>
+            <div className="card-info">
+              <div className="card-heading-row">
+                <h3 className="card-title">{t("home.snipTitle")}</h3>
+                <span className="card-shortcut-chip">Ctrl+Shift+S</span>
+              </div>
+              <p className="card-desc">
+                {t("home.snipDesc")}
               </p>
             </div>
             <div className="card-arrow">
@@ -210,39 +241,39 @@ export function HomeView({
           <div className="recent-top-row">
             <div className="recent-lbl">
               <Icon name="zap" size={13} />
-              <span>أحدث عنصر في الحافظة</span>
+              <span>{t("home.recentLabel")}</span>
             </div>
             <span className="recent-type-badge">
               {recentItem.image || recentItem.kind === "image"
-                ? "صورة"
+                ? t("home.typeImage")
                 : recentItem.kind === "link"
-                ? "رابط"
+                ? t("home.typeLink")
                 : recentItem.kind === "files"
-                ? "ملفات"
-                : "نص"}
+                ? t("home.typeFiles")
+                : t("home.typeText")}
             </span>
           </div>
 
           <div
             className="recent-content-body"
             onClick={onGoToClipboard}
-            title="انقر لفتح العنصر في سجل الحافظة"
+            title={t("home.recentClick")}
           >
             <div className="recent-preview-text">
               {recentItem.image || recentItem.kind === "image" ? (
-                <span className="recent-img-tag">[لقطة شاشة / صورة محفوظة]</span>
+                <span className="recent-img-tag">{t("home.recentImageTag")}</span>
               ) : (
-                recentItem.text || recentItem.ocrText || "محتوى محفوظ"
+                recentItem.text || recentItem.ocrText || t("home.recentSavedContent")
               )}
             </div>
 
             <button
               className={`recent-copy-btn ${copiedRecent ? "copied" : ""}`}
               onClick={handleCopyRecent}
-              title="نسخ فوري إلى الحافظة"
+              title={t("home.copyNowTitle")}
             >
               <Icon name={copiedRecent ? "check" : "copy"} size={13} />
-              <span>{copiedRecent ? "تم النسخ!" : "نسخ فوري"}</span>
+              <span>{copiedRecent ? t("home.copiedBtn") : t("home.copyNow")}</span>
             </button>
           </div>
         </section>
@@ -255,16 +286,16 @@ export function HomeView({
           onClick={onGoToClipboard}
           role="button"
           tabIndex={0}
-          title="عرض إجمالي السجل"
+          title={t("home.statTotalTitle")}
         >
           <div className="stat-capsule-icon total">
             <Icon name="clipboard" size={13} />
           </div>
           <div className="stat-capsule-meta">
             <span className="stat-capsule-val">
-              {loadingStats ? "…" : stats?.total.toLocaleString("ar-EG") ?? 0}
+              {loadingStats ? "…" : stats ? fmtNum(stats.total, "ar") : "0"}
             </span>
-            <span className="stat-capsule-lbl">الإجمالي</span>
+            <span className="stat-capsule-lbl">{t("home.statTotal")}</span>
           </div>
         </div>
 
@@ -275,16 +306,16 @@ export function HomeView({
           onClick={onGoToClipboard}
           role="button"
           tabIndex={0}
-          title="عرض العناصر المثبتة"
+          title={t("home.statPinnedTitle")}
         >
           <div className="stat-capsule-icon pin">
             <Icon name="pin" size={13} filled />
           </div>
           <div className="stat-capsule-meta">
             <span className="stat-capsule-val">
-              {loadingStats ? "…" : stats?.pinned.toLocaleString("ar-EG") ?? 0}
+              {loadingStats ? "…" : stats ? fmtNum(stats.pinned, "ar") : "0"}
             </span>
-            <span className="stat-capsule-lbl">المثبتة</span>
+            <span className="stat-capsule-lbl">{t("home.statPinned")}</span>
           </div>
         </div>
 
@@ -295,16 +326,16 @@ export function HomeView({
           onClick={onGoToClipboard}
           role="button"
           tabIndex={0}
-          title="عرض المفضلة"
+          title={t("home.statFavTitle")}
         >
           <div className="stat-capsule-icon star">
             <Icon name="star" size={13} filled />
           </div>
           <div className="stat-capsule-meta">
             <span className="stat-capsule-val">
-              {loadingStats ? "…" : stats?.favorites.toLocaleString("ar-EG") ?? 0}
+              {loadingStats ? "…" : stats ? fmtNum(stats.favorites, "ar") : "0"}
             </span>
-            <span className="stat-capsule-lbl">المفضلة</span>
+            <span className="stat-capsule-lbl">{t("home.statFavorites")}</span>
           </div>
         </div>
 
@@ -315,16 +346,16 @@ export function HomeView({
           onClick={onGoToClipboard}
           role="button"
           tabIndex={0}
-          title="عرض النصوص والروابط"
+          title={t("home.statTextTitle")}
         >
           <div className="stat-capsule-icon text">
             <Icon name="text" size={13} />
           </div>
           <div className="stat-capsule-meta">
             <span className="stat-capsule-val">
-              {loadingStats ? "…" : stats?.texts.toLocaleString("ar-EG") ?? 0}
+              {loadingStats ? "…" : stats ? fmtNum(stats.texts, "ar") : "0"}
             </span>
-            <span className="stat-capsule-lbl">النصوص</span>
+            <span className="stat-capsule-lbl">{t("home.statTexts")}</span>
           </div>
         </div>
       </section>
@@ -334,37 +365,44 @@ export function HomeView({
         <button
           className={`hub-tool-btn ${paused ? "btn-warn" : "btn-ok"}`}
           onClick={onTogglePause}
-          title={paused ? "استئناف التقاط الحافظة" : "إيقاف الالتقاط مؤقتاً"}
+          title={paused ? t("home.btnResumeTitle") : t("home.btnPauseTitle")}
         >
           <Icon name={paused ? "play" : "pause"} size={13} />
-          <span>{paused ? "استئناف" : "إيقاف مؤقت"}</span>
+          <span>{paused ? t("home.btnResume") : t("home.btnPause")}</span>
         </button>
+
+        {onSnip && (
+          <button className="hub-tool-btn" onClick={onSnip} title={`${t("home.snipTitle")} (Ctrl+Shift+S)`}>
+            <Icon name="crop" size={13} />
+            <span>{t("home.scSnip")}</span>
+          </button>
+        )}
 
         <button
           className="hub-tool-btn"
           onClick={onToggleTheme}
-          title="تبديل المظهر الداكن / الفاتح"
+          title={t("home.themeBtnTitle")}
         >
           <Icon name={isDark ? "sun" : "moon"} size={13} />
-          <span>{isDark ? "فاتح" : "داكن"}</span>
+          <span>{isDark ? t("home.btnLight") : t("home.btnDark")}</span>
         </button>
 
         <button
           className="hub-tool-btn"
           onClick={onGoToSettings}
-          title="إعدادات التطبيق (Ctrl+5)"
+          title={t("home.btnSettingsTitle")}
         >
           <Icon name="settings" size={13} />
-          <span>الإعدادات</span>
+          <span>{t("home.btnSettings")}</span>
         </button>
 
         <button
           className="hub-tool-btn btn-danger"
           onClick={onClearHistory}
-          title="تفريغ سجل الحافظة بالكامل"
+          title={t("home.btnClearTitle")}
         >
           <Icon name="trash" size={13} />
-          <span>تفريغ</span>
+          <span>{t("home.btnClear")}</span>
         </button>
       </footer>
 
@@ -372,15 +410,15 @@ export function HomeView({
       <div className="home-shortcuts-ribbon">
         <div className="shortcut-badge">
           <kbd>{globalShortcut}</kbd>
-          <span>فتح الحافظة</span>
+          <span>{t("home.scOpen")}</span>
         </div>
         <div className="shortcut-badge">
           <kbd>Ctrl+Shift+X</kbd>
-          <span>التدقيق السريع</span>
+          <span>{t("home.scFixer")}</span>
         </div>
         <div className="shortcut-badge">
           <kbd>Esc</kbd>
-          <span>إخفاء</span>
+          <span>{t("home.scHide")}</span>
         </div>
       </div>
     </div>

@@ -3,28 +3,49 @@ const AR_MONTHS = [
   "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
 ];
 
-/** Arabic relative time with Latin digits, e.g. "منذ 5 دقائق". */
-export function relTime(ts: number): string {
+const EN_MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+const REL: Record<"ar" | "en", Record<string, string>> = {
+  ar: { now: "الآن", min: "منذ دقيقة", hour: "منذ ساعة", day: "منذ يوم" },
+  en: { now: "Just now", min: "A minute ago", hour: "An hour ago", day: "A day ago" },
+};
+
+export type UiLang = "ar" | "en";
+
+/** Locale-aware relative time with Latin digits, e.g. "منذ 5 دقائق" / "5 minutes ago". */
+export function relTime(ts: number, lang: UiLang = "ar"): string {
   const diff = Date.now() - ts;
   const min = 60_000, hour = 3_600_000, day = 86_400_000;
+  const r = REL[lang];
+  const mins = (n: number) =>
+    lang === "ar" ? `منذ ${n} دقائق` : `${n} minute${n === 1 ? "" : "s"} ago`;
+  const hours = (n: number) =>
+    lang === "ar" ? `منذ ${n} ساعات` : `${n} hour${n === 1 ? "" : "s"} ago`;
+  const days = (n: number) =>
+    lang === "ar" ? `منذ ${n} أيام` : `${n} day${n === 1 ? "" : "s"} ago`;
 
-  if (diff < 45_000) return "الآن";
-  if (diff < 2 * min) return "منذ دقيقة";
-  if (diff < 55 * min) return `منذ ${Math.round(diff / min)} دقائق`;
-  if (diff < 2 * hour) return "منذ ساعة";
-  if (diff < 22 * hour) return `منذ ${Math.round(diff / hour)} ساعات`;
-  if (diff < 2 * day) return "منذ يوم";
-  if (diff < 25 * day) return `منذ ${Math.round(diff / day)} أيام`;
+  if (diff < 45_000) return r.now;
+  if (diff < 2 * min) return r.min;
+  if (diff < 55 * min) return mins(Math.round(diff / min));
+  if (diff < 2 * hour) return r.hour;
+  if (diff < 22 * hour) return hours(Math.round(diff / hour));
+  if (diff < 2 * day) return r.day;
+  if (diff < 25 * day) return days(Math.round(diff / day));
 
   const d = new Date(ts);
-  return `${d.getDate()} ${AR_MONTHS[d.getMonth()]}`;
+  const months = lang === "ar" ? AR_MONTHS : EN_MONTHS;
+  return `${d.getDate()} ${months[d.getMonth()]}`;
 }
 
-export function fullTime(ts: number): string {
+export function fullTime(ts: number, lang: UiLang = "ar"): string {
   const d = new Date(ts);
+  const months = lang === "ar" ? AR_MONTHS : EN_MONTHS;
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${d.getDate()} ${AR_MONTHS[d.getMonth()]} — ${hh}:${mm}`;
+  return `${d.getDate()} ${months[d.getMonth()]} — ${hh}:${mm}`;
 }
 
 export function isUrl(s: string): boolean {
@@ -108,11 +129,24 @@ const APP_NAMES: Record<string, string> = {
   wt: "Terminal",
 };
 
+const APP_NAMES_EN: Record<string, string> = {
+  notepad: "Notepad",
+  explorer: "File Explorer",
+  cmd: "Command Prompt",
+};
+
 /** Display name for the source app (friendly name or stripped .exe). */
-export function sourceLabel(src: string | null): string {
+export function sourceLabel(src: string | null, lang: UiLang = "ar"): string {
   if (!src) return "";
   const clean = src.replace(/\.exe$/i, "").toLowerCase();
-  return APP_NAMES[clean] || (src.replace(/\.exe$/i, ""));
+  const ar = APP_NAMES[clean];
+  const en = APP_NAMES_EN[clean];
+  if (lang === "en") {
+    if (en) return en;
+    if (ar && /^[A-Za-z0-9 +&./-]+$/.test(ar)) return ar;
+    return src.replace(/\.exe$/i, "");
+  }
+  return ar || src.replace(/\.exe$/i, "");
 }
 
 /** Short human label for a file path. */

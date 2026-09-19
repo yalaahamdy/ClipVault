@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Settings, Stats } from "../types";
+import type { Item, Settings, Stats } from "../types";
 import { api } from "../api";
 import { Icon } from "../icons";
 
@@ -8,10 +8,12 @@ interface Props {
   paused: boolean;
   onGoToClipboard: () => void;
   onGoToTyping?: () => void;
+  onGoToVault?: () => void;
   onGoToSettings: () => void;
   onTogglePause: () => void;
   onToggleTheme: () => void;
   onClearHistory: () => void;
+  onNotify?: (msg: string, err?: boolean) => void;
 }
 
 export function HomeView({
@@ -19,329 +21,366 @@ export function HomeView({
   paused,
   onGoToClipboard,
   onGoToTyping,
+  onGoToVault,
   onGoToSettings,
   onTogglePause,
   onToggleTheme,
   onClearHistory,
+  onNotify,
 }: Props) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [recentItem, setRecentItem] = useState<Item | null>(null);
+  const [copiedRecent, setCopiedRecent] = useState(false);
+  const [loadingRecent, setLoadingRecent] = useState(true);
 
+  // Load stats and latest item
   useEffect(() => {
     let alive = true;
+    setLoadingStats(true);
+    setLoadingRecent(true);
+
     api
       .getStats()
       .then((s) => {
         if (alive) setStats(s);
       })
-      .catch(() => {
-        /* silent */
-      })
+      .catch(() => {})
       .finally(() => {
         if (alive) setLoadingStats(false);
       });
+
+    api
+      .getItems("all", "", 1, 0)
+      .then((page) => {
+        if (alive && page.items && page.items.length > 0) {
+          setRecentItem(page.items[0]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoadingRecent(false);
+      });
+
     return () => {
       alive = false;
     };
   }, []);
 
-  const shortcut = settings?.globalShortcut || "Ctrl+Shift+V";
+  const handleCopyRecent = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!recentItem) return;
+    try {
+      await api.copyItem(recentItem.id);
+      setCopiedRecent(true);
+      if (onNotify) {
+        onNotify("تم نسخ العنصر الأخير إلى الحافظة بنجاح");
+      }
+      setTimeout(() => setCopiedRecent(false), 1600);
+    } catch {
+      if (onNotify) {
+        onNotify("تعذر نسخ العنصر", true);
+      }
+    }
+  };
+
   const isDark = settings?.theme !== "light";
+  const globalShortcut = settings?.globalShortcut || "Ctrl+Shift+V";
 
   return (
-    <div className="home-view">
-      {/* Hero Banner */}
-      <section className="home-hero">
-        <div className="home-brand">
-          <div className="home-logo-wrap">
-            <div className="home-logo-glow" />
-            <img src="/icon.png" alt="ClipVault" className="home-app-icon" />
+    <div className="home-view-compact">
+      {/* 1. Header: Compact 3D Brand & Live Status Hub */}
+      <header className="home-hub-header">
+        <div className="hub-brand">
+          <div className="hub-logo-box">
+            <img src="/icon.png" alt="ClipVault" className="hub-logo-img" />
+            <div className="hub-logo-glow" />
           </div>
-          <div className="home-title-block">
-            <div className="home-title-row">
-              <h1 className="home-title">ClipVault</h1>
-              <span className="home-version-badge">v1.0.0</span>
-              <span className={`home-status-badge ${paused ? "paused" : "active"}`}>
-                <span className="status-dot" />
-                {paused ? "المراقبة متوقفة" : "المراقب نشط"}
-              </span>
+          <div className="hub-identity">
+            <div className="hub-title-line">
+              <span className="hub-title">ClipVault</span>
+              <span className="hub-badge-v">v1.4.0</span>
             </div>
-            <p className="home-subtitle">
-              مدير حافظة احترافي وفائق السرعة لنظام Windows — خصوصية محلية 100%
+            <span className="hub-tagline">مدير الحافظة والكتابة الذكية المحلي</span>
+          </div>
+        </div>
+
+        {/* Clickable Live Monitor Status Badge */}
+        <button
+          className={`hub-status-pill ${paused ? "paused" : "active"}`}
+          onClick={onTogglePause}
+          title={paused ? "انقر لاستئناف تسجيل الحافظة" : "انقر لإيقاف التسجيل مؤقتاً"}
+        >
+          <span className="hub-status-pulse" />
+          <span className="hub-status-text">
+            {paused ? "المراقب متوقف" : "المراقب نشط"}
+          </span>
+          <span className="hub-status-action">{paused ? "تشغيل" : "إيقاف"}</span>
+        </button>
+      </header>
+
+      {/* 2. Core Launchpad: 3D High-Contrast Navigation Hub */}
+      <section className="home-launchpad">
+        {/* Card 1: Clipboard Records */}
+        <div
+          className="launchpad-card clipboard"
+          onClick={onGoToClipboard}
+          role="button"
+          tabIndex={0}
+        >
+          <div className="card-accent-bar" />
+          <div className="card-icon-wrap clipboard">
+            <Icon name="clipboard" size={20} />
+          </div>
+          <div className="card-info">
+            <div className="card-heading-row">
+              <h3 className="card-title">سجل الحافظة</h3>
+              <span className="card-shortcut-chip">Enter ↵</span>
+            </div>
+            <p className="card-desc">
+              {loadingStats
+                ? "جاري تحميل السجل…"
+                : `${stats?.total.toLocaleString("ar-EG") ?? 0} عنصر محفوظ للبحث والنسخ الفوري`}
             </p>
           </div>
+          <div className="card-arrow">
+            <Icon name="chevronRight" size={16} />
+          </div>
         </div>
 
-        {/* Primary Action Buttons */}
-        <div className="home-cta-wrap" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-          <button className="home-cta-btn" onClick={onGoToClipboard}>
-            <div className="cta-content">
-              <div className="cta-icon">
-                <img src="/icon.png" alt="" className="cta-app-icon" />
-              </div>
-              <div className="cta-text">
-                <span className="cta-title">سجل الحافظة المنسوخة</span>
-                <span className="cta-sub">
-                  تصفح والبحث في {stats ? stats.total.toLocaleString("en") : "…"} عنصر
-                </span>
-              </div>
+        {/* Card 2: Smart Typing & Writing Suite */}
+        {onGoToTyping && (
+          <div
+            className="launchpad-card typing"
+            onClick={onGoToTyping}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="card-accent-bar" />
+            <div className="card-icon-wrap typing">
+              <Icon name="sparkles" size={20} />
             </div>
-            <div className="cta-arrow">
-              <span className="cta-shortcut">Enter ↵</span>
-              <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}>
-                <Icon name="chevronRight" size={16} />
-              </span>
+            <div className="card-info">
+              <div className="card-heading-row">
+                <h3 className="card-title">الكتابة والتدقيق الذكي</h3>
+                <span className="card-shortcut-chip">Ctrl+Shift+X</span>
+              </div>
+              <p className="card-desc">
+                عكس اللغة التلقائي، التدقيق الإملائي الفوري، والإملاء الصوتي
+              </p>
             </div>
-          </button>
+            <div className="card-arrow">
+              <Icon name="chevronRight" size={16} />
+            </div>
+          </div>
+        )}
 
-          {onGoToTyping && (
-            <button
-              className="home-cta-btn"
-              onClick={onGoToTyping}
-              style={{
-                background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
-                boxShadow: "0 4px 14px rgba(142, 68, 173, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.4)",
-              }}
-            >
-              <div className="cta-content">
-                <div className="cta-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
-                  <Icon name="sparkles" size={18} />
-                </div>
-                <div className="cta-text">
-                  <span className="cta-title">الكتابة الذكية والتدقيق</span>
-                  <span className="cta-sub">عكس اللغة، الإملاء الصوتي وتصحيح الأخطاء</span>
-                </div>
+        {/* Card 3: Password Vault */}
+        {onGoToVault && (
+          <div
+            className="launchpad-card vault"
+            onClick={onGoToVault}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="card-accent-bar" />
+            <div className="card-icon-wrap vault">
+              <Icon name="lock" size={20} />
+            </div>
+            <div className="card-info">
+              <div className="card-heading-row">
+                <h3 className="card-title">خزينة كلمات المرور</h3>
+                <span className="card-shortcut-chip">Ctrl+3</span>
               </div>
-              <div className="cta-arrow">
-                <span className="cta-shortcut">Ctrl+4</span>
-                <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}>
-                  <Icon name="chevronRight" size={16} />
-                </span>
-              </div>
-            </button>
-          )}
-        </div>
+              <p className="card-desc">
+                تشفير محلي عسكري ومولد كلمات مرور آمنة 100%
+              </p>
+            </div>
+            <div className="card-arrow">
+              <Icon name="chevronRight" size={16} />
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* Quick Stats Grid */}
-      <section className="home-section">
-        <div className="section-header">
-          <h3>
-            <Icon name="activity" size={15} /> إحصائيات الحافظة
-          </h3>
-          <span className="section-badge">مباشر</span>
-        </div>
-
-        <div className="stats-grid">
-          <div className="stat-card" onClick={onGoToClipboard} role="button" tabIndex={0}>
-            <div className="stat-icon total">
-              <Icon name="clipboard" size={16} />
+      {/* 3. Instant Recent Snippet Card */}
+      {recentItem && (
+        <section className="home-recent-box">
+          <div className="recent-top-row">
+            <div className="recent-lbl">
+              <Icon name="zap" size={13} />
+              <span>أحدث عنصر في الحافظة</span>
             </div>
-            <div className="stat-data">
-              <span className="stat-value">
-                {loadingStats ? "…" : stats?.total.toLocaleString("en") ?? 0}
-              </span>
-              <span className="stat-label">إجمالي السجل</span>
-            </div>
-          </div>
-
-          <div className="stat-card" onClick={onGoToClipboard} role="button" tabIndex={0}>
-            <div className="stat-icon pin">
-              <Icon name="pin" size={16} filled />
-            </div>
-            <div className="stat-data">
-              <span className="stat-value">
-                {loadingStats ? "…" : stats?.pinned.toLocaleString("en") ?? 0}
-              </span>
-              <span className="stat-label">عناصر مثبتة</span>
-            </div>
-          </div>
-
-          <div className="stat-card" onClick={onGoToClipboard} role="button" tabIndex={0}>
-            <div className="stat-icon star">
-              <Icon name="star" size={16} filled />
-            </div>
-            <div className="stat-data">
-              <span className="stat-value">
-                {loadingStats ? "…" : stats?.favorites.toLocaleString("en") ?? 0}
-              </span>
-              <span className="stat-label">المفضلة</span>
-            </div>
-          </div>
-
-          <div className="stat-card" onClick={onGoToClipboard} role="button" tabIndex={0}>
-            <div className="stat-icon text">
-              <Icon name="text" size={16} />
-            </div>
-            <div className="stat-data">
-              <span className="stat-value">
-                {loadingStats ? "…" : stats?.texts.toLocaleString("en") ?? 0}
-              </span>
-              <span className="stat-label">نصوص وأكواد</span>
-            </div>
-          </div>
-
-          <div className="stat-card" onClick={onGoToClipboard} role="button" tabIndex={0}>
-            <div className="stat-icon image">
-              <Icon name="image" size={16} />
-            </div>
-            <div className="stat-data">
-              <span className="stat-value">
-                {loadingStats ? "…" : stats?.images.toLocaleString("en") ?? 0}
-              </span>
-              <span className="stat-label">لقطات وصور</span>
-            </div>
-          </div>
-
-          <div className="stat-card" onClick={onGoToClipboard} role="button" tabIndex={0}>
-            <div className="stat-icon link">
-              <Icon name="link" size={16} />
-            </div>
-            <div className="stat-data">
-              <span className="stat-value">
-                {loadingStats ? "…" : stats?.links.toLocaleString("en") ?? 0}
-              </span>
-              <span className="stat-label">روابط مسجلة</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Highlights & Features */}
-      <section className="home-section">
-        <div className="section-header">
-          <h3>
-            <Icon name="sparkles" size={15} /> مميزات ClipVault
-          </h3>
-        </div>
-
-        <div className="features-list">
-          <div className="feature-item">
-            <div className="feature-icon zap">
-              <Icon name="zap" size={15} />
-            </div>
-            <div className="feature-text">
-              <span className="feature-title">التقاط فوري وتلقائي</span>
-              <span className="feature-desc">
-                يسجل كل النصوص والروابط والصور والملفات فور نسخها من أي برنامج.
-              </span>
-            </div>
-          </div>
-
-          <div className="feature-item">
-            <div className="feature-icon shield">
-              <Icon name="shield" size={15} />
-            </div>
-            <div className="feature-text">
-              <span className="feature-title">أمان وخصوصية محلية 100%</span>
-              <span className="feature-desc">
-                كل البيانات مخزنة محليًا داخل جهازك في قاعدة SQLite بدون أي اتصال بالإنترنت.
-              </span>
-            </div>
-          </div>
-
-          <div className="feature-item">
-            <div className="feature-icon tag">
-              <Icon name="tag" size={15} />
-            </div>
-            <div className="feature-text">
-              <span className="feature-title">تنظيم متقدم بالوسوم والمجموعات</span>
-              <span className="feature-desc">
-                أنشئ وسوماً ملونة ومجموعات لتنظيم نصوص العمل والأكواد المهمة.
-              </span>
-            </div>
-          </div>
-
-          <div className="feature-item">
-            <div className="feature-icon search">
-              <Icon name="search" size={15} />
-            </div>
-            <div className="feature-text">
-              <span className="feature-title">بحث لحظي ذكي وتصفية سريعة</span>
-              <span className="feature-desc">
-                تصفية فورية حسب نوع المحتوى (نص، رابط، صورة، ملف) مع تمييز نتائج البحث.
-              </span>
-            </div>
-          </div>
-
-          <div className="feature-item">
-            <div className="feature-icon zap">
-              <Icon name="sparkles" size={15} />
-            </div>
-            <div className="feature-text">
-              <span className="feature-title">الكتابة الذكية وعكس اللغة والإملاء الصوتي</span>
-              <span className="feature-desc">
-                تصحيح النصوص المكتوبة بلغة مقلوبة في أي تطبيق، تدقيق إملائي فوري، وكتابة بالصوت.
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Quick Shortcuts Cheatsheet */}
-      <section className="home-section">
-        <div className="section-header">
-          <h3>
-            <Icon name="keyboard" size={15} /> أبرز اختصارات لوحة المفاتيح
-          </h3>
-        </div>
-
-        <div className="shortcuts-card">
-          <div className="shortcut-row">
-            <span className="sc-desc">فتح / إخفاء الحافظة من أي مكان</span>
-            <kbd className="sc-key">{shortcut}</kbd>
-          </div>
-          <div className="shortcut-row">
-            <span className="sc-desc">الكتابة والتدقيق الذكي</span>
-            <kbd className="sc-key">Ctrl+4</kbd>
-          </div>
-          <div className="shortcut-row">
-            <span className="sc-desc">التنقل السريع بين العناصر</span>
-            <span className="sc-keys-group">
-              <kbd className="sc-key">↑</kbd>
-              <kbd className="sc-key">↓</kbd>
+            <span className="recent-type-badge">
+              {recentItem.image || recentItem.kind === "image"
+                ? "صورة"
+                : recentItem.kind === "link"
+                ? "رابط"
+                : recentItem.kind === "files"
+                ? "ملفات"
+                : "نص"}
             </span>
           </div>
-          <div className="shortcut-row">
-            <span className="sc-desc">نسخ العنصر المحدد وإغلاق النافذة</span>
-            <kbd className="sc-key">Enter</kbd>
+
+          <div
+            className="recent-content-body"
+            onClick={onGoToClipboard}
+            title="انقر لفتح العنصر في سجل الحافظة"
+          >
+            <div className="recent-preview-text">
+              {recentItem.image || recentItem.kind === "image" ? (
+                <span className="recent-img-tag">[لقطة شاشة / صورة محفوظة]</span>
+              ) : (
+                recentItem.text || recentItem.ocrText || "محتوى محفوظ"
+              )}
+            </div>
+
+            <button
+              className={`recent-copy-btn ${copiedRecent ? "copied" : ""}`}
+              onClick={handleCopyRecent}
+              title="نسخ فوري إلى الحافظة"
+            >
+              <Icon name={copiedRecent ? "check" : "copy"} size={13} />
+              <span>{copiedRecent ? "تم النسخ!" : "نسخ فوري"}</span>
+            </button>
           </div>
-          <div className="shortcut-row">
-            <span className="sc-desc">تبديل المظهر (داكن / فاتح)</span>
-            <kbd className="sc-key">Ctrl+T</kbd>
+        </section>
+      )}
+
+      {/* 4. Compact 3D Stats Capsule (Single Horizontal Row) */}
+      <section className="home-stats-capsule">
+        <div
+          className="stat-capsule-item"
+          onClick={onGoToClipboard}
+          role="button"
+          tabIndex={0}
+          title="عرض إجمالي السجل"
+        >
+          <div className="stat-capsule-icon total">
+            <Icon name="clipboard" size={13} />
           </div>
-          <div className="shortcut-row">
-            <span className="sc-desc">الانتقال المباشر للإعدادات</span>
-            <kbd className="sc-key">Ctrl+,</kbd>
+          <div className="stat-capsule-meta">
+            <span className="stat-capsule-val">
+              {loadingStats ? "…" : stats?.total.toLocaleString("ar-EG") ?? 0}
+            </span>
+            <span className="stat-capsule-lbl">الإجمالي</span>
+          </div>
+        </div>
+
+        <div className="capsule-divider" />
+
+        <div
+          className="stat-capsule-item"
+          onClick={onGoToClipboard}
+          role="button"
+          tabIndex={0}
+          title="عرض العناصر المثبتة"
+        >
+          <div className="stat-capsule-icon pin">
+            <Icon name="pin" size={13} filled />
+          </div>
+          <div className="stat-capsule-meta">
+            <span className="stat-capsule-val">
+              {loadingStats ? "…" : stats?.pinned.toLocaleString("ar-EG") ?? 0}
+            </span>
+            <span className="stat-capsule-lbl">المثبتة</span>
+          </div>
+        </div>
+
+        <div className="capsule-divider" />
+
+        <div
+          className="stat-capsule-item"
+          onClick={onGoToClipboard}
+          role="button"
+          tabIndex={0}
+          title="عرض المفضلة"
+        >
+          <div className="stat-capsule-icon star">
+            <Icon name="star" size={13} filled />
+          </div>
+          <div className="stat-capsule-meta">
+            <span className="stat-capsule-val">
+              {loadingStats ? "…" : stats?.favorites.toLocaleString("ar-EG") ?? 0}
+            </span>
+            <span className="stat-capsule-lbl">المفضلة</span>
+          </div>
+        </div>
+
+        <div className="capsule-divider" />
+
+        <div
+          className="stat-capsule-item"
+          onClick={onGoToClipboard}
+          role="button"
+          tabIndex={0}
+          title="عرض النصوص والروابط"
+        >
+          <div className="stat-capsule-icon text">
+            <Icon name="text" size={13} />
+          </div>
+          <div className="stat-capsule-meta">
+            <span className="stat-capsule-val">
+              {loadingStats ? "…" : stats?.texts.toLocaleString("ar-EG") ?? 0}
+            </span>
+            <span className="stat-capsule-lbl">النصوص</span>
           </div>
         </div>
       </section>
 
-      {/* Quick Actions Footer Bar */}
-      <div className="home-quick-actions">
+      {/* 5. Tactile 3D Quick Toolbar */}
+      <footer className="home-quick-toolbar">
         <button
-          className={`btn ${paused ? "warn" : ""}`}
+          className={`hub-tool-btn ${paused ? "btn-warn" : "btn-ok"}`}
           onClick={onTogglePause}
-          title={paused ? "استئناف التسجيل" : "إيقاف التسجيل مؤقتًا"}
+          title={paused ? "استئناف التقاط الحافظة" : "إيقاف الالتقاط مؤقتاً"}
         >
-          <Icon name={paused ? "play" : "pause"} size={14} />
-          {paused ? "استئناف التسجيل" : "إيقاف مؤقت"}
+          <Icon name={paused ? "play" : "pause"} size={13} />
+          <span>{paused ? "استئناف" : "إيقاف مؤقت"}</span>
         </button>
 
-        <button className="btn" onClick={onToggleTheme} title="تبديل المظهر">
-          <Icon name={isDark ? "sun" : "moon"} size={14} />
-          {isDark ? "المظهر الفاتح" : "المظهر الداكن"}
+        <button
+          className="hub-tool-btn"
+          onClick={onToggleTheme}
+          title="تبديل المظهر الداكن / الفاتح"
+        >
+          <Icon name={isDark ? "sun" : "moon"} size={13} />
+          <span>{isDark ? "فاتح" : "داكن"}</span>
         </button>
 
-        <button className="btn" onClick={onGoToSettings} title="الإعدادات">
-          <Icon name="settings" size={14} />
-          الإعدادات
+        <button
+          className="hub-tool-btn"
+          onClick={onGoToSettings}
+          title="إعدادات التطبيق (Ctrl+5)"
+        >
+          <Icon name="settings" size={13} />
+          <span>الإعدادات</span>
         </button>
 
-        <button className="btn danger" onClick={onClearHistory} title="تفريغ السجل">
-          <Icon name="trash" size={14} />
-          تفريغ
+        <button
+          className="hub-tool-btn btn-danger"
+          onClick={onClearHistory}
+          title="تفريغ سجل الحافظة بالكامل"
+        >
+          <Icon name="trash" size={13} />
+          <span>تفريغ</span>
         </button>
+      </footer>
+
+      {/* 6. Compact Shortcuts Ribbon */}
+      <div className="home-shortcuts-ribbon">
+        <div className="shortcut-badge">
+          <kbd>{globalShortcut}</kbd>
+          <span>فتح الحافظة</span>
+        </div>
+        <div className="shortcut-badge">
+          <kbd>Ctrl+Shift+X</kbd>
+          <span>التدقيق السريع</span>
+        </div>
+        <div className="shortcut-badge">
+          <kbd>Esc</kbd>
+          <span>إخفاء</span>
+        </div>
       </div>
     </div>
   );

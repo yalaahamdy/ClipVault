@@ -834,10 +834,12 @@ export default function App() {
             setTimeout(() => searchRef.current?.focus(), 30);
           }}
           onGoToTyping={() => setView("typing")}
+          onGoToVault={() => setView("passwords")}
           onGoToSettings={() => setView("settings")}
           onTogglePause={() => changePaused(!paused)}
           onToggleTheme={() => applySettingsPatch({ theme: settings?.theme === "light" ? "dark" : "light" })}
           onClearHistory={clearAll}
+          onNotify={notify}
         />
       )}
 

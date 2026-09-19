@@ -54,10 +54,15 @@ pub fn run() {
         ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
+                .with_handler(|app, shortcut, event| {
                     use tauri_plugin_global_shortcut::ShortcutState;
                     if event.state == ShortcutState::Pressed {
-                        show_popup(app);
+                        let sc_str = format!("{shortcut}");
+                        if sc_str.to_lowercase().contains("x") {
+                            let _ = crate::typing::fix_selected_text_in_active_window();
+                        } else {
+                            show_popup(app);
+                        }
                     }
                 })
                 .build(),
@@ -185,6 +190,8 @@ pub fn register_shortcut(app: &AppHandle, shortcut_str: &str) -> Result<(), Stri
     let _ = gs.unregister_all();
     gs.register(shortcut_str)
         .map_err(|e| format!("تعذر تسجيل الاختصار {shortcut_str}: {e}"))?;
+    // Register global selection typing fixer (Ctrl+Shift+X)
+    let _ = gs.register("Ctrl+Shift+X");
     Ok(())
 }
 

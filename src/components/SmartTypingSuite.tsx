@@ -21,7 +21,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
   const [isAutoDetect, setIsAutoDetect] = useState(true);
   const [isFixingSelection, setIsFixingSelection] = useState(false);
 
-  // Predictions for layout/spellcheck
+  // Mobile predictions
   const [predictions, setPredictions] = useState<string[]>([]);
 
   // ---------------- State: Spell Checker ----------------
@@ -35,7 +35,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
   const [interimTranscript, setInterimTranscript] = useState("");
   const recognitionRef = useRef<any>(null);
 
-  // ---------------- Layout Inversion Logic ----------------
+  // ---------------- Layout Inversion ----------------
   useEffect(() => {
     if (!inputText) {
       setConvertedText("");
@@ -53,8 +53,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
       setTargetLang(tLang);
     }
 
-    // Update predictions
-    const preds = predictWords(inputText, 5);
+    const preds = predictWords(inputText, 6);
     setPredictions(preds);
   }, [inputText, isAutoDetect, targetLang]);
 
@@ -68,14 +67,14 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     }
   };
 
-  const handleSwapLangs = () => {
+  const handleSwapLangs = useCallback(() => {
     setIsAutoDetect(false);
     const newTarget = targetLang === "ar" ? "en" : "ar";
     setTargetLang(newTarget);
     setSourceLang(newTarget === "ar" ? "en" : "ar");
-  };
+  }, [targetLang]);
 
-  const handleCopy = async (textToCopy: string, label = "تم النسخ") => {
+  const handleCopy = useCallback(async (textToCopy: string, label = "تم النسخ") => {
     if (!textToCopy) return;
     try {
       await navigator.clipboard.writeText(textToCopy);
@@ -83,32 +82,32 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     } catch {
       onNotify("فشل النسخ إلى الحافظة", true);
     }
-  };
+  }, [onNotify]);
 
-  const handleInjectIntoActiveApp = async (textToInject: string) => {
+  const handleInjectIntoActiveApp = useCallback(async (textToInject: string) => {
     if (!textToInject) return;
     try {
       await typingApi.injectText(textToInject);
-      onNotify("تم لصق النص في التطبيق النشط بنجاح!");
+      onNotify("تم اللصق في التطبيق النشط بنجاح!");
     } catch (e) {
       onNotify(`تعذر اللصق في التطبيق: ${String(e)}`, true);
     }
-  };
+  }, [onNotify]);
 
-  const handleFixSelectedTextSystemWide = async () => {
+  const handleFixSelectedTextSystemWide = useCallback(async () => {
     setIsFixingSelection(true);
     try {
       const fixed = await typingApi.fixSelectedText();
-      onNotify(`تم تصحيح لغة النص المحدد في التطبيق النشط: "${fixed.slice(0, 30)}${fixed.length > 30 ? "..." : ""}"`);
+      onNotify(`تم تصحيح النص المحدد: "${fixed.slice(0, 25)}${fixed.length > 25 ? "..." : ""}"`);
     } catch (e) {
-      onNotify(String(e) || "تعذر تصحيح النص المحدد. تأكد من تظليل النص في التطبيق أولاً.", true);
+      onNotify(String(e) || "تعذر تصحيح النص. حدد نصاً في أي برنامج ثم جرب ثانية.", true);
     } finally {
       setIsFixingSelection(false);
     }
-  };
+  }, [onNotify]);
 
   // ---------------- Spell Checker Logic ----------------
-  const handleCheckSpelling = (text: string) => {
+  const handleCheckSpelling = useCallback((text: string) => {
     setSpellInput(text);
     if (!text.trim()) {
       setSpellResult(null);
@@ -116,7 +115,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     }
     const result = checkSpelling(text);
     setSpellResult(result);
-  };
+  }, []);
 
   const handleApplySingleFix = (issue: SpellIssue, suggestion: string) => {
     if (!spellResult) return;
@@ -125,15 +124,15 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
       suggestion +
       spellInput.slice(issue.end);
     handleCheckSpelling(newText);
-    onNotify(`تم استبدال "${issue.word}" بـ "${suggestion}"`);
+    onNotify(`تم تصحيح "${issue.word}" ➔ "${suggestion}"`);
   };
 
-  const handleFixAllSpelling = () => {
+  const handleFixAllSpelling = useCallback(() => {
     if (!spellResult || spellResult.issues.length === 0) return;
     const fixed = spellResult.corrected;
     handleCheckSpelling(fixed);
-    onNotify(`تم تطبيق كافة التصحيحات (${spellResult.issues.length} خطأ)!`);
-  };
+    onNotify(`تم تصحيح كافة الأخطاء (${spellResult.issues.length} خطأ)!`);
+  }, [spellResult, handleCheckSpelling, onNotify]);
 
   // ---------------- Voice Typing Logic ----------------
   useEffect(() => {
@@ -166,7 +165,6 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     };
 
     recognizer.onerror = (event: any) => {
-      console.warn("Speech recognition error:", event.error);
       if (event.error !== "no-speech") {
         onNotify(`تنبيه الإملاء الصوتي: ${event.error}`, true);
       }
@@ -181,22 +179,18 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
     recognitionRef.current = recognizer;
 
     return () => {
-      try {
-        recognizer.abort();
-      } catch { /* silent */ }
+      try { recognizer.abort(); } catch { /* silent */ }
     };
   }, [voiceLang, onNotify]);
 
-  const toggleVoiceListening = () => {
+  const toggleVoiceListening = useCallback(() => {
     if (!recognitionRef.current) {
-      onNotify("خاصية التعرف على الصوت غير مدعومة في بيئة التشغيل الحالية", true);
+      onNotify("الإملاء الصوتي غير مدعوم في بيئة التشغيل الحالية", true);
       return;
     }
 
     if (isListening) {
-      try {
-        recognitionRef.current.stop();
-      } catch { /* silent */ }
+      try { recognitionRef.current.stop(); } catch { /* silent */ }
       setIsListening(false);
     } else {
       try {
@@ -205,11 +199,85 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
         setIsListening(true);
         onNotify("جارٍ الاستماع... تحدث بوضوح عبر الميكروفون.");
       } catch (err) {
-        onNotify("تعذر بدء الميكروفون. يرجى التحقق من أذونات الصوت.", true);
+        onNotify("تعذر تشغيل الميكروفون. يرجى التحقق من أذونات الصوت.", true);
         setIsListening(false);
       }
     }
-  };
+  }, [isListening, voiceLang, onNotify]);
+
+  // ---------------- In-component Keyboard Shortcuts ----------------
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Alt+1, Alt+2, Alt+3 for tab switching
+      if (e.altKey && e.key === "1") { e.preventDefault(); setActiveTab("layout"); return; }
+      if (e.altKey && e.key === "2") { e.preventDefault(); setActiveTab("spellcheck"); return; }
+      if (e.altKey && e.key === "3") { e.preventDefault(); setActiveTab("voice"); return; }
+
+      // Alt+S: Swap languages in layout tab
+      if (e.altKey && (e.key.toLowerCase() === "s")) {
+        e.preventDefault();
+        handleSwapLangs();
+        return;
+      }
+
+      // Ctrl+Shift+X: Trigger selection fix
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "x") {
+        e.preventDefault();
+        handleFixSelectedTextSystemWide();
+        return;
+      }
+
+      // Ctrl+Enter or Shift+Enter inside layout tab
+      if (activeTab === "layout") {
+        if (e.shiftKey && e.key === "Enter") {
+          e.preventDefault();
+          if (convertedText) handleInjectIntoActiveApp(convertedText);
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          if (convertedText) handleCopy(convertedText, "تم نسخ النتيجة المعكوسة");
+          return;
+        }
+      }
+
+      // Ctrl+Enter inside spellcheck tab
+      if (activeTab === "spellcheck") {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          handleFixAllSpelling();
+          return;
+        }
+        if (e.shiftKey && e.key === "Enter") {
+          e.preventDefault();
+          if (spellInput) handleInjectIntoActiveApp(spellInput);
+          return;
+        }
+      }
+
+      // Ctrl+M inside voice tab: toggle mic
+      if (activeTab === "voice") {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "m") {
+          e.preventDefault();
+          toggleVoiceListening();
+          return;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    activeTab,
+    convertedText,
+    handleCopy,
+    handleFixAllSpelling,
+    handleFixSelectedTextSystemWide,
+    handleInjectIntoActiveApp,
+    handleSwapLangs,
+    spellInput,
+    toggleVoiceListening,
+  ]);
 
   const sampleInvertTexts = [
     { label: "hghsjo]hl ➔ الاستخدام", val: "hghsjo]hl" },
@@ -219,79 +287,79 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
   ];
 
   return (
-    <div className="typing-suite-view animate-fade-in">
-      {/* Header Banner */}
-      <div className="typing-hero-card">
-        <div className="typing-hero-content">
-          <div className="typing-hero-badge">
-            <Icon name="zap" size={14} />
-            <span>Smart Writing & Typing Suite</span>
+    <div className="mobile-typing-suite animate-fade-in">
+      {/* 1. Compact Header Bar (Mobile-friendly) */}
+      <header className="mobile-typing-topbar">
+        <div className="typing-header-brand">
+          <div className="typing-sparkle-ico">
+            <Icon name="sparkles" size={14} />
           </div>
-          <h2 className="typing-hero-title">جناح الكتابة الذكي والتدقيق الشامل</h2>
-          <p className="typing-hero-desc">
-            حلول فورية لمشاكل الكتابة الشائعة: تصحيح اللغة المقلوبة، تدقيق الهمزات والأخطاء اللغوية، والكتابة الصوتية الفائقة لنظام ويندوز.
-          </p>
+          <div className="typing-header-titles">
+            <span className="typing-main-heading">الكتابة والتدقيق الذكي</span>
+            <span className="typing-sub-heading">حلول الكتابة الفورية لنظام Windows</span>
+          </div>
         </div>
 
-        <div className="typing-hero-action">
-          <button
-            className={`btn-hero-fix-selection ${isFixingSelection ? "loading" : ""}`}
-            onClick={handleFixSelectedTextSystemWide}
-            disabled={isFixingSelection}
-            title="حدد أي نص في أي برنامج واضغط هنا لتصحيح لغته فوراً واستبداله في مكانه"
-          >
-            <Icon name="sparkles" size={16} />
-            <span>تصحيح النص المحدد في أي تطبيق نشط</span>
-          </button>
-          <span className="hero-hint">يعمل على مستوى نظام Windows فوراً</span>
-        </div>
-      </div>
-
-      {/* Sub-Navigation Tabs */}
-      <div className="typing-subtabs-bar">
         <button
-          className={`typing-subtab ${activeTab === "layout" ? "active" : ""}`}
-          onClick={() => setActiveTab("layout")}
+          className={`btn-quick-fix-selection ${isFixingSelection ? "loading" : ""}`}
+          onClick={handleFixSelectedTextSystemWide}
+          disabled={isFixingSelection}
+          title="تصحيح النص المحدد في أي تطبيق نشط واستبداله فوراً (Ctrl+Shift+X)"
         >
-          <Icon name="globe" size={14} />
-          <span>عكس لغة لوحة المفاتيح</span>
+          <Icon name="sparkles" size={12} />
+          <span>تصحيح التحديد</span>
+          <kbd className="inline-kbd">Ctrl+Shift+X</kbd>
+        </button>
+      </header>
+
+      {/* 2. Sub-Tab Segment Control */}
+      <nav className="mobile-segment-tabs" role="tablist" aria-label="أقسام الكتابة الذكية">
+        <button
+          className={`segment-btn ${activeTab === "layout" ? "active" : ""}`}
+          onClick={() => setActiveTab("layout")}
+          title="عكس لغة المفاتيح (Alt+1)"
+        >
+          <Icon name="globe" size={13} />
+          <span>عكس اللغة</span>
         </button>
 
         <button
-          className={`typing-subtab ${activeTab === "spellcheck" ? "active" : ""}`}
+          className={`segment-btn ${activeTab === "spellcheck" ? "active" : ""}`}
           onClick={() => setActiveTab("spellcheck")}
+          title="المدقق الإملائي (Alt+2)"
         >
-          <Icon name="check" size={14} />
-          <span>المدقق الإملائي واللغوي</span>
+          <Icon name="check" size={13} />
+          <span>المدقق الإملائي</span>
           {spellResult && spellResult.issues.length > 0 && (
-            <span className="subtab-badge warn">{spellResult.issues.length}</span>
+            <span className="tab-pill-counter warn">{spellResult.issues.length}</span>
           )}
         </button>
 
         <button
-          className={`typing-subtab ${activeTab === "voice" ? "active" : ""}`}
+          className={`segment-btn ${activeTab === "voice" ? "active" : ""}`}
           onClick={() => setActiveTab("voice")}
+          title="الكتابة بالصوت (Alt+3)"
         >
-          <Icon name="microphone" size={14} />
-          <span>الكتابة والإملاء الصوتي</span>
-          {isListening && <span className="subtab-badge live">تسجيل...</span>}
+          <Icon name="microphone" size={13} />
+          <span>الإملاء الصوتي</span>
+          {isListening && <span className="tab-pill-counter live">نشط</span>}
         </button>
-      </div>
+      </nav>
 
-      {/* TAB 1: KEYBOARD LAYOUT INVERTER */}
+      {/* 3. TAB 1: KEYBOARD LAYOUT INVERTER (Vertical Mobile Flow) */}
       {activeTab === "layout" && (
-        <div className="typing-tab-content">
-          {/* Quick Word Prediction Bar */}
+        <section className="mobile-tab-scroll-body">
+          {/* Prediction Bar */}
           {predictions.length > 0 && (
-            <div className="prediction-bar">
-              <span className="prediction-label">
-                <Icon name="sparkles" size={12} /> توقع الكلمات:
+            <div className="mobile-predictions-strip">
+              <span className="predictions-tag">
+                <Icon name="sparkles" size={11} /> اقتراحات:
               </span>
-              <div className="prediction-chips">
+              <div className="predictions-scroll-row">
                 {predictions.map((word, idx) => (
                   <button
                     key={idx}
-                    className="prediction-chip"
+                    className="mobile-word-chip"
                     onClick={() => handleApplyPrediction(word)}
                   >
                     {word}
@@ -301,425 +369,389 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({ onNotify }) 
             </div>
           )}
 
-          <div className="layout-converter-grid">
-            {/* Input Box */}
-            <div className="converter-panel-card source-card">
-              <div className="converter-panel-header">
-                <div className="panel-lang-badge">
-                  <span className="dot dot-source" />
-                  <span>النص المدخل ({sourceLang === "ar" ? "عربي" : "إنجليزي"})</span>
-                  {looksLikeLayoutMismatch(inputText) && (
-                    <span className="mismatch-detected-pill">
-                      <Icon name="alert-triangle" size={12} /> خطأ تبديل لغة مكتشف!
-                    </span>
-                  )}
-                </div>
-                <div className="panel-actions">
-                  {inputText && (
-                    <button
-                      className="panel-mini-btn"
-                      onClick={() => setInputText("")}
-                      title="مسح"
-                    >
-                      <Icon name="trash" size={12} />
-                    </button>
-                  )}
-                </div>
+          {/* Input Box Card */}
+          <div className="mobile-card-panel input-panel">
+            <div className="panel-bar-top">
+              <div className="lang-indicator-pill">
+                <span className={`status-indicator ${sourceLang}`} />
+                <span>المُدخل: {sourceLang === "ar" ? "عربي" : "English"}</span>
+                {looksLikeLayoutMismatch(inputText) && (
+                  <span className="mismatch-warning-tag">
+                    <Icon name="alert-triangle" size={11} /> لغة معكوسة!
+                  </span>
+                )}
               </div>
-
-              <textarea
-                className="converter-textarea"
-                placeholder="اكتب هنا، مثلاً: اكتب بحروف إنجليزية وأنت تقصد العربية مثل 'hghsjoqhl' أو العكس..."
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                dir="auto"
-                autoFocus
-              />
-
-              <div className="converter-panel-footer">
-                <span className="text-count-info">{inputText.length} حرف</span>
-                <div className="quick-samples">
-                  <span className="samples-title">نماذج سريعة:</span>
-                  {sampleInvertTexts.map((sample, idx) => (
-                    <button
-                      key={idx}
-                      className="sample-pill-btn"
-                      onClick={() => setInputText(sample.val)}
-                      title={`تجربة: ${sample.label}`}
-                    >
-                      {sample.val}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {inputText && (
+                <button
+                  className="mini-icon-btn"
+                  onClick={() => setInputText("")}
+                  title="مسح الحقل"
+                >
+                  <Icon name="trash" size={12} />
+                </button>
+              )}
             </div>
 
-            {/* Middle Controls (Swap & Convert) */}
-            <div className="converter-divider-control">
-              <button
-                className="btn-swap-langs"
-                onClick={handleSwapLangs}
-                title="تبديل اتجاه التحويل يدويًا"
-              >
-                <Icon name="refresh" size={16} />
-              </button>
-              <div className="divider-line" />
-            </div>
+            <textarea
+              className="mobile-smart-textarea"
+              placeholder="اكتب هنا بحروف مقلوبة مثل: 'hghsjo]hl' أو 'صصصزلخخلمثزؤخة'..."
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              dir="auto"
+              autoFocus
+            />
 
-            {/* Output Box */}
-            <div className="converter-panel-card target-card">
-              <div className="converter-panel-header">
-                <div className="panel-lang-badge">
-                  <span className="dot dot-target" />
-                  <span>النتيجة المعكوسة ({targetLang === "ar" ? "عربي" : "إنجليزي"})</span>
-                </div>
-                <div className="panel-actions">
-                  {convertedText && (
-                    <>
-                      <button
-                        className="panel-action-pill primary"
-                        onClick={() => handleCopy(convertedText)}
-                        title="نسخ النتيجة إلى الحافظة"
-                      >
-                        <Icon name="copy" size={13} />
-                        <span>نسخ</span>
-                      </button>
-                      <button
-                        className="panel-action-pill accent"
-                        onClick={() => handleInjectIntoActiveApp(convertedText)}
-                        title="لصق النص المعكوس فوراً في التطبيق أو المستند النشط"
-                      >
-                        <Icon name="monitor" size={13} />
-                        <span>لصق بالتطبيق النشط</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <textarea
-                className="converter-textarea target"
-                placeholder="ستظهر النتيجة المعكوسة هنا لحظياً..."
-                value={convertedText}
-                readOnly
-                dir="auto"
-              />
-
-              <div className="converter-panel-footer">
-                <span className="text-count-info">{convertedText.length} حرف</span>
-                {convertedText && (
+            <div className="panel-bar-bottom">
+              <span className="count-label">{inputText.length} حرف</span>
+              <div className="samples-wrap">
+                <span className="samples-lbl">نماذج:</span>
+                {sampleInvertTexts.slice(0, 3).map((sample, idx) => (
                   <button
-                    className="send-to-spellcheck-btn"
-                    onClick={() => {
-                      setSpellInput(convertedText);
-                      handleCheckSpelling(convertedText);
-                      setActiveTab("spellcheck");
-                    }}
+                    key={idx}
+                    className="mini-sample-chip"
+                    onClick={() => setInputText(sample.val)}
+                    title={sample.label}
                   >
-                    <Icon name="check" size={12} />
-                    <span>فحص وتدقيق هذه النتيجة في المدقق الإملائي ➔</span>
+                    {sample.val}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Action Divider Strip */}
+          <div className="mobile-action-strip">
+            <button
+              className="btn-round-swap"
+              onClick={handleSwapLangs}
+              title="تبديل اتجاه التحويل يدويًا (Alt+S)"
+            >
+              <Icon name="refresh" size={14} />
+            </button>
+            <span className="swap-label">
+              {sourceLang === "ar" ? "عربي ➔ إنجليزي" : "English ➔ عربي"}
+            </span>
+          </div>
+
+          {/* Output Box Card */}
+          <div className="mobile-card-panel output-panel">
+            <div className="panel-bar-top">
+              <div className="lang-indicator-pill">
+                <span className={`status-indicator ${targetLang}`} />
+                <span>النتيجة المعكوسة: {targetLang === "ar" ? "عربي" : "English"}</span>
+              </div>
+              <div className="panel-actions-row">
+                {convertedText && (
+                  <>
+                    <button
+                      className="pill-action-btn primary"
+                      onClick={() => handleCopy(convertedText, "تم نسخ النتيجة")}
+                      title="نسخ النتيجة (Ctrl+Enter)"
+                    >
+                      <Icon name="copy" size={12} />
+                      <span>نسخ</span>
+                    </button>
+                    <button
+                      className="pill-action-btn accent"
+                      onClick={() => handleInjectIntoActiveApp(convertedText)}
+                      title="لصق في التطبيق النشط فوراً (Shift+Enter)"
+                    >
+                      <Icon name="monitor" size={12} />
+                      <span>لصق بالتطبيق</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <textarea
+              className="mobile-smart-textarea output"
+              placeholder="النتيجة المعكوسة ستظهر هنا لحظياً..."
+              value={convertedText}
+              readOnly
+              dir="auto"
+            />
+
+            {convertedText && (
+              <div className="panel-bar-bottom single-action">
+                <button
+                  className="btn-transfer-link"
+                  onClick={() => {
+                    setSpellInput(convertedText);
+                    handleCheckSpelling(convertedText);
+                    setActiveTab("spellcheck");
+                  }}
+                >
+                  <Icon name="check" size={12} />
+                  <span>تدقيق هذه النتيجة إملائياً في المدقق ➔</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* 4. TAB 2: PRO SPELL CHECKER (Vertical Stack for Popups) */}
+      {activeTab === "spellcheck" && (
+        <section className="mobile-tab-scroll-body">
+          {/* Editor Card */}
+          <div className="mobile-card-panel spell-panel">
+            <div className="panel-bar-top">
+              <div className="panel-title-group">
+                <Icon name="edit" size={13} />
+                <span>محرر التدقيق اللغوي</span>
+              </div>
+              <div className="panel-actions-row">
+                {spellResult && spellResult.issues.length > 0 && (
+                  <button
+                    className="pill-action-btn magic"
+                    onClick={handleFixAllSpelling}
+                    title="تصحيح كافة الأخطاء المكتشفة بنقرة واحدة (Ctrl+Enter)"
+                  >
+                    <Icon name="sparkles" size={12} />
+                    <span>تصحيح الكل ({spellResult.issues.length})</span>
+                  </button>
+                )}
+                {spellInput && (
+                  <button
+                    className="mini-icon-btn"
+                    onClick={() => handleCheckSpelling("")}
+                    title="مسح الحقل"
+                  >
+                    <Icon name="trash" size={12} />
                   </button>
                 )}
               </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* TAB 2: PRO SPELL CHECKER */}
-      {activeTab === "spellcheck" && (
-        <div className="typing-tab-content">
-          <div className="spellcheck-grid">
-            {/* Left: Input Textarea */}
-            <div className="spell-editor-box">
-              <div className="spell-editor-header">
-                <div className="spell-header-title">
-                  <Icon name="edit" size={14} />
-                  <span>محرر التدقيق والتحليل اللغوي</span>
-                </div>
-                <div className="spell-header-actions">
-                  {spellResult && spellResult.issues.length > 0 && (
-                    <button
-                      className="btn-fix-all-magic"
-                      onClick={handleFixAllSpelling}
-                      title="تصحيح كافة الأخطاء المكتشفة بنقرة واحدة"
-                    >
-                      <Icon name="sparkles" size={14} />
-                      <span>تصحيح الكل تلقائياً ({spellResult.issues.length})</span>
-                    </button>
-                  )}
-                  {spellInput && (
-                    <button
-                      className="panel-mini-btn"
-                      onClick={() => handleCheckSpelling("")}
-                      title="مسح"
-                    >
-                      <Icon name="trash" size={12} />
-                    </button>
-                  )}
-                </div>
+            <textarea
+              className="mobile-smart-textarea spell-text"
+              placeholder="الصق أو اكتب النص هنا لتدقيقه... مثلاً: 'شكرن جزيلن تم إستدعاء احمد حتي نصل الي حل جدن ممتز'"
+              value={spellInput}
+              onChange={(e) => handleCheckSpelling(e.target.value)}
+              dir="auto"
+            />
+
+            <div className="panel-bar-bottom">
+              <div className="spell-counts">
+                <span>الكلمات: {spellResult?.wordCount || 0}</span>
+                <span>الملاحظات: {spellResult?.issues.length || 0}</span>
               </div>
-
-              <textarea
-                className="spell-textarea"
-                placeholder="الصق أو اكتب النص هنا لتدقيقه... مثلاً: 'شكرن جزيلن تم إستدعاء احمد حتي نصل الي حل جدن ممتز'"
-                value={spellInput}
-                onChange={(e) => handleCheckSpelling(e.target.value)}
-                dir="auto"
-              />
-
-              <div className="spell-editor-footer">
-                <div className="spell-stats-row">
-                  <span>الكلمات: {spellResult?.wordCount || 0}</span>
-                  <span>الأخطاء: {spellResult?.issues.length || 0}</span>
-                </div>
-
-                <div className="spell-footer-btns">
-                  {spellInput && (
-                    <>
-                      <button
-                        className="panel-action-pill"
-                        onClick={() => handleCopy(spellInput, "تم نسخ النص المصحح")}
-                      >
-                        <Icon name="copy" size={12} />
-                        <span>نسخ</span>
-                      </button>
-                      <button
-                        className="panel-action-pill accent"
-                        onClick={() => handleInjectIntoActiveApp(spellInput)}
-                      >
-                        <Icon name="monitor" size={12} />
-                        <span>لصق في التطبيق النشط</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Analysis & Issues List */}
-            <div className="spell-insights-box">
-              <div className="insights-header">
-                <Icon name="info" size={14} />
-                <span>تقرير السلامة اللغوية والبدائل</span>
-              </div>
-
-              {spellResult ? (
-                <div className="insights-body">
-                  {/* Score Indicator */}
-                  <div className="score-widget">
-                    <div className="score-circle">
-                      <span className="score-number">{spellResult.score}%</span>
-                      <span className="score-caption">دقة النص</span>
-                    </div>
-                    <div className="score-details">
-                      <div className="score-bar-bg">
-                        <div
-                          className="score-bar-fill"
-                          style={{
-                            width: `${spellResult.score}%`,
-                            background:
-                              spellResult.score > 80
-                                ? "var(--success)"
-                                : spellResult.score > 50
-                                ? "var(--warn)"
-                                : "var(--danger)",
-                          }}
-                        />
-                      </div>
-                      <span className="score-hint">
-                        {spellResult.issues.length === 0
-                          ? "نص سليم وخالٍ من الأخطاء المكتشفة!"
-                          : `تم العثور على ${spellResult.issues.length} ملاحظة وتصحيح مقترح`}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Issues List */}
-                  <div className="issues-list">
-                    {spellResult.issues.length === 0 ? (
-                      <div className="clean-text-state">
-                        <Icon name="check-circle" size={32} />
-                        <p>ممتاز! النص سليم ومطابق لقواعد الإملاء المعتمدة.</p>
-                      </div>
-                    ) : (
-                      spellResult.issues.map((issue) => (
-                        <div key={issue.id} className="issue-card animate-in">
-                          <div className="issue-card-top">
-                            <span className="issue-word-bad">{issue.word}</span>
-                            <span className="issue-arrow">➔</span>
-                            <div className="issue-suggestions-wrap">
-                              {issue.suggestions.map((sug, sIdx) => (
-                                <button
-                                  key={sIdx}
-                                  className="suggestion-apply-btn"
-                                  onClick={() => handleApplySingleFix(issue, sug)}
-                                  title="انقر لتطبيق هذا التصحيح في النص"
-                                >
-                                  {sug}
-                                  <Icon name="check" size={11} />
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="issue-card-bottom">
-                            <span className="issue-tag">{issue.type}</span>
-                            <span className="issue-reason">{issue.explanation}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="insights-empty-state">
-                  <Icon name="edit" size={28} />
-                  <p>اكتب أو الصق نصاً في المحرر لبدء الفحص والتدقيق اللحظي.</p>
+              {spellInput && (
+                <div className="panel-actions-row">
+                  <button
+                    className="pill-action-btn"
+                    onClick={() => handleCopy(spellInput, "تم نسخ النص المصحح")}
+                  >
+                    <Icon name="copy" size={11} />
+                    <span>نسخ</span>
+                  </button>
+                  <button
+                    className="pill-action-btn accent"
+                    onClick={() => handleInjectIntoActiveApp(spellInput)}
+                  >
+                    <Icon name="monitor" size={11} />
+                    <span>لصق بالتطبيق</span>
+                  </button>
                 </div>
               )}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* TAB 3: VOICE-TO-TEXT STUDIO */}
-      {activeTab === "voice" && (
-        <div className="typing-tab-content">
-          <div className="voice-studio-card">
-            <div className="voice-studio-header">
-              <div className="voice-studio-info">
-                <div className="voice-icon-box">
-                  <Icon name="microphone" size={20} />
-                </div>
-                <div>
-                  <h3 className="voice-studio-title">استوديو الإملاء الصوتي المباشر</h3>
-                  <p className="voice-studio-sub">
-                    تحدث بوضوح ليتم تحويل صوتك إلى نص عربي أو إنجليزي فائق الدقة
-                  </p>
-                </div>
+          {/* Results and Issues Card */}
+          <div className="mobile-card-panel issues-panel">
+            <div className="panel-bar-top">
+              <div className="panel-title-group">
+                <Icon name="info" size={13} />
+                <span>تقرير السلامة اللغوية</span>
               </div>
-
-              <div className="voice-controls-bar">
-                <div className="lang-picker-group">
-                  <label>لغة الإملاء:</label>
-                  <select
-                    className="voice-lang-select"
-                    value={voiceLang}
-                    onChange={(e) => setVoiceLang(e.target.value as any)}
-                    disabled={isListening}
-                  >
-                    <option value="ar-SA">العربية (السعودية / فصحى)</option>
-                    <option value="ar-EG">العربية (مصر)</option>
-                    <option value="en-US">English (US)</option>
-                  </select>
-                </div>
-
-                <button
-                  className={`btn-toggle-mic ${isListening ? "listening" : ""}`}
-                  onClick={toggleVoiceListening}
+              {spellResult && (
+                <div
+                  className="score-badge-compact"
+                  style={{
+                    color:
+                      spellResult.score > 80
+                        ? "var(--success)"
+                        : spellResult.score > 50
+                        ? "var(--warn)"
+                        : "var(--danger)",
+                  }}
                 >
-                  <Icon name={isListening ? "pause" : "microphone"} size={16} />
-                  <span>{isListening ? "إيقاف الاستماع" : "بدء الإملاء الصوتي"}</span>
-                </button>
-              </div>
+                  دقة النص: {spellResult.score}%
+                </div>
+              )}
             </div>
 
-            {/* Mic Waves Animation if listening */}
-            {isListening && (
-              <div className="audio-visualizer-bar">
-                <span className="wave-bar" />
-                <span className="wave-bar" />
-                <span className="wave-bar" />
-                <span className="wave-bar" />
-                <span className="wave-bar" />
-                <span className="wave-text">الميكروفون نشط — جارٍ استلام الموجات الصوتية وتحويلها إلى كلمات...</span>
-              </div>
-            )}
-
-            {/* Live Transcript Display */}
-            <div className="voice-transcript-wrapper">
-              <div className="voice-transcript-box" dir="auto">
-                {voiceTranscript ? (
-                  <>
-                    <span className="final-text">{voiceTranscript}</span>
-                    {interimTranscript && (
-                      <span className="interim-text"> {interimTranscript}</span>
-                    )}
-                  </>
-                ) : interimTranscript ? (
-                  <span className="interim-text">{interimTranscript}</span>
+            {spellResult ? (
+              <div className="mobile-issues-list">
+                {spellResult.issues.length === 0 ? (
+                  <div className="compact-clean-msg">
+                    <Icon name="check-circle" size={24} />
+                    <span>النص سليم وخالٍ من الأخطاء الإملائية المكتشفة!</span>
+                  </div>
                 ) : (
-                  <span className="voice-placeholder">
-                    {isListening
-                      ? "جارٍ الاستماع... ابدأ بالتحدث الآن ليظهر كلامك هنا فوراً..."
-                      : "انقر على 'بدء الإملاء الصوتي' وتحدث ليتم تدوين كلامك تلقائياً."}
-                  </span>
+                  spellResult.issues.map((issue) => (
+                    <div key={issue.id} className="mobile-issue-row">
+                      <div className="issue-details">
+                        <span className="bad-word">{issue.word}</span>
+                        <span className="issue-arrow">➔</span>
+                        <div className="suggestions-btns">
+                          {issue.suggestions.map((sug, sIdx) => (
+                            <button
+                              key={sIdx}
+                              className="btn-apply-suggestion"
+                              onClick={() => handleApplySingleFix(issue, sug)}
+                              title="انقر لتطبيق هذا التصحيح في النص"
+                            >
+                              {sug}
+                              <Icon name="check" size={10} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <span className="issue-explanation">{issue.explanation}</span>
+                    </div>
+                  ))
                 )}
               </div>
+            ) : (
+              <div className="compact-empty-msg">
+                <span>اكتب أو الصق نصاً في المحرر أعلاه لبدء الفحص التلقائي.</span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
-              <div className="voice-transcript-actions">
-                <div className="voice-actions-left">
-                  {voiceTranscript && (
-                    <button
-                      className="panel-mini-btn"
-                      onClick={() => setVoiceTranscript("")}
-                      title="مسح النص المفرغ"
-                    >
-                      <Icon name="trash" size={13} />
-                      <span>مسح</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="voice-actions-right">
-                  {voiceTranscript && (
-                    <>
-                      <button
-                        className="panel-action-pill primary"
-                        onClick={() => handleCopy(voiceTranscript, "تم نسخ النص المفرغ")}
-                      >
-                        <Icon name="copy" size={13} />
-                        <span>نسخ النص</span>
-                      </button>
-                      <button
-                        className="panel-action-pill accent"
-                        onClick={() => handleInjectIntoActiveApp(voiceTranscript)}
-                        title="ضخ هذا النص في التطبيق أو المستند النشط الآن"
-                      >
-                        <Icon name="monitor" size={13} />
-                        <span>لصق بالتطبيق النشط</span>
-                      </button>
-                      <button
-                        className="panel-action-pill"
-                        onClick={() => {
-                          setInputText(voiceTranscript);
-                          setActiveTab("layout");
-                        }}
-                        title="عكس لغة هذا النص"
-                      >
-                        <Icon name="refresh" size={13} />
-                        <span>عكس اللغة</span>
-                      </button>
-                      <button
-                        className="panel-action-pill"
-                        onClick={() => {
-                          setSpellInput(voiceTranscript);
-                          handleCheckSpelling(voiceTranscript);
-                          setActiveTab("spellcheck");
-                        }}
-                        title="تدقيق هذا النص إملائياً"
-                      >
-                        <Icon name="check" size={13} />
-                        <span>تدقيق إملائي</span>
-                      </button>
-                    </>
-                  )}
-                </div>
+      {/* 5. TAB 3: VOICE-TO-TEXT STUDIO (Mobile Mic Style) */}
+      {activeTab === "voice" && (
+        <section className="mobile-tab-scroll-body">
+          <div className="mobile-card-panel voice-card">
+            {/* Top Config */}
+            <div className="panel-bar-top">
+              <div className="panel-title-group">
+                <Icon name="microphone" size={13} />
+                <span>استوديو الإملاء الصوتي</span>
+              </div>
+              <div className="voice-lang-picker">
+                <select
+                  className="mobile-voice-select"
+                  value={voiceLang}
+                  onChange={(e) => setVoiceLang(e.target.value as any)}
+                  disabled={isListening}
+                >
+                  <option value="ar-SA">العربية (السعودية / فصحى)</option>
+                  <option value="ar-EG">العربية (مصر)</option>
+                  <option value="en-US">English (US)</option>
+                </select>
               </div>
             </div>
+
+            {/* Centered Floating Mic Button with Pulsing Waves */}
+            <div className="mobile-mic-center">
+              <button
+                className={`mobile-big-mic ${isListening ? "active-listening" : ""}`}
+                onClick={toggleVoiceListening}
+                title={isListening ? "إيقاف الاستماع (Ctrl+M)" : "بدء التسجيل الصوتي (Ctrl+M)"}
+              >
+                <Icon name={isListening ? "pause" : "microphone"} size={26} />
+              </button>
+              <span className="mic-hint-label">
+                {isListening
+                  ? "الميكروفون نشط — تحدث بوضوح الآن..."
+                  : "انقر على الميكروفون لبدء الإملاء (Ctrl+M)"}
+              </span>
+            </div>
+
+            {/* Transcript Area */}
+            <div className="mobile-transcript-box" dir="auto">
+              {voiceTranscript ? (
+                <>
+                  <span className="final-transcript">{voiceTranscript}</span>
+                  {interimTranscript && (
+                    <span className="interim-transcript"> {interimTranscript}</span>
+                  )}
+                </>
+              ) : interimTranscript ? (
+                <span className="interim-transcript">{interimTranscript}</span>
+              ) : (
+                <span className="transcript-placeholder">
+                  سيظهر كلامك المفرغ هنا فور نطقك به بدقة فائقة...
+                </span>
+              )}
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="panel-bar-bottom">
+              {voiceTranscript ? (
+                <>
+                  <button
+                    className="mini-icon-btn"
+                    onClick={() => setVoiceTranscript("")}
+                    title="مسح الحقل"
+                  >
+                    <Icon name="trash" size={12} />
+                  </button>
+                  <div className="panel-actions-row">
+                    <button
+                      className="pill-action-btn primary"
+                      onClick={() => handleCopy(voiceTranscript, "تم نسخ النص المفرغ")}
+                    >
+                      <Icon name="copy" size={11} />
+                      <span>نسخ</span>
+                    </button>
+                    <button
+                      className="pill-action-btn accent"
+                      onClick={() => handleInjectIntoActiveApp(voiceTranscript)}
+                    >
+                      <Icon name="monitor" size={11} />
+                      <span>لصق بالتطبيق</span>
+                    </button>
+                    <button
+                      className="pill-action-btn"
+                      onClick={() => {
+                        setInputText(voiceTranscript);
+                        setActiveTab("layout");
+                      }}
+                      title="عكس لغة النص"
+                    >
+                      <Icon name="refresh" size={11} />
+                      <span>عكس</span>
+                    </button>
+                    <button
+                      className="pill-action-btn"
+                      onClick={() => {
+                        setSpellInput(voiceTranscript);
+                        handleCheckSpelling(voiceTranscript);
+                        setActiveTab("spellcheck");
+                      }}
+                      title="تدقيق إملائي"
+                    >
+                      <Icon name="check" size={11} />
+                      <span>تدقيق</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <span className="empty-hint">اضغط الميكروفون أو Ctrl+M للتحدث</span>
+              )}
+            </div>
           </div>
-        </div>
+        </section>
       )}
+
+      {/* 6. Mobile Shortcuts Quick Footer */}
+      <footer className="mobile-shortcuts-footer">
+        <div className="shortcut-chip-item">
+          <kbd>Ctrl+Shift+X</kbd> <span>تصحيح التحديد في أي برنامج</span>
+        </div>
+        <div className="shortcut-chip-item">
+          <kbd>Ctrl+↵</kbd> <span>نسخ / تطبيق الكل</span>
+        </div>
+        <div className="shortcut-chip-item">
+          <kbd>Shift+↵</kbd> <span>لصق بالتطبيق</span>
+        </div>
+      </footer>
     </div>
   );
 };

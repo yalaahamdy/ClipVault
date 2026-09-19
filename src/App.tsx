@@ -952,6 +952,21 @@ export default function App() {
               </div>
             </div>
             <div className="settings-group">
+              <h4>الكتابة والتدقيق الذكي</h4>
+              <div className="keys-grid">
+                <span className="k-desc">تصحيح النص المحدد بأي تطبيق</span>
+                <span className="k-keys"><kbd>Ctrl+Shift+X</kbd></span>
+                <span className="k-desc">الانتقال للكتابة الذكية</span>
+                <span className="k-keys"><kbd>Ctrl+4</kbd></span>
+                <span className="k-desc">تبديل الاتجاه (عربي ↔ إنجليزي)</span>
+                <span className="k-keys"><kbd>Alt+S</kbd></span>
+                <span className="k-desc">تطبيق الكل / نسخ النتيجة</span>
+                <span className="k-keys"><kbd>Ctrl+Enter</kbd></span>
+                <span className="k-desc">لصق بالتطبيق النشط</span>
+                <span className="k-keys"><kbd>Shift+Enter</kbd></span>
+              </div>
+            </div>
+            <div className="settings-group">
               <h4>على العنصر المحدد</h4>
               <div className="keys-grid">
                 <span className="k-desc">حذف</span>

@@ -58,7 +58,7 @@ export function TagPanel({ open, active, tags, collections, onChanged, onFilter,
 
   return (
     <>
-      <div className="scrim" style={{ zIndex: 45 }} onClick={onClose} />
+      <div className="scrim" onClick={onClose} />
       <aside className="side-panel" aria-label="التنظيم">
         <div className="panel-head">
           <span>التنظيم</span>

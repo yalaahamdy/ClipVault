@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Settings } from "../types";
 import { api } from "../api";
+import { APP_VERSION } from "../version";
 import { Icon } from "../icons";
 
 interface Props {
@@ -95,11 +96,9 @@ export function SettingsView({
     <div className="settings-view">
       <div className="settings-head">
         <button className="icon-btn" onClick={onClose} title="رجوع (Esc)">
-          <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}>
-            <Icon name="chevronRight" size={16} />
-          </span>
+          <Icon name="chevronRight" size={16} />
         </button>
-        <h3>الإعدادات</h3>
+        <h3><Icon name="settings" size={15} /> الإعدادات</h3>
       </div>
 
       <div className="settings-body">
@@ -161,8 +160,7 @@ export function SettingsView({
               <div className="s-desc">لن يُسجَّل أي محتوى جديد حتى الاستئناف</div>
             </div>
             <button
-              className={`switch${paused ? " on" : ""}`}
-              style={paused ? { background: "var(--warn)", borderColor: "var(--warn)" } : undefined}
+              className={`switch${paused ? " on warn" : ""}`}
               onClick={() => onPausedChange(!paused)}
               aria-label="إيقاف التسجيل"
             />
@@ -178,7 +176,7 @@ export function SettingsView({
               aria-label="تمويه المحتوى الحساس"
             />
           </div>
-          <div className="setting-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+          <div className="setting-row stack">
             <div className="s-label">
               <div className="s-title">تطبيقات مستثناة من التسجيل</div>
               <div className="s-desc">مثال: مدير كلمات المرور — اكتب اسم العملية (keepass.exe)</div>
@@ -268,14 +266,14 @@ export function SettingsView({
         {/* ---------- about ---------- */}
         <div className="settings-group">
           <h4>حول</h4>
-          <div className="setting-row" style={{ justifyContent: "center" }}>
+          <div className="setting-row center">
             <div className="about-box">
               <div className="logo-line">
                 <img src="/icon.png" alt="ClipVault" className="about-logo-img" />
                 ClipVault
               </div>
-              <div>الإصدار 1.0.0 — يعمل محليًا بنسبة 100%</div>
-              <div style={{ marginTop: 3, color: "var(--text-3)" }}>
+              <div>الإصدار {APP_VERSION} — يعمل محليًا بنسبة 100%</div>
+              <div className="about-privacy">
                 لا يرسل بياناتك إلى الإنترنت — كل شيء يبقى على جهازك
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Item, Settings, Stats } from "../types";
 import { api } from "../api";
+import { APP_VERSION } from "../version";
 import { Icon } from "../icons";
 
 interface Props {
@@ -99,7 +100,7 @@ export function HomeView({
           <div className="hub-identity">
             <div className="hub-title-line">
               <span className="hub-title">ClipVault</span>
-              <span className="hub-badge-v">v1.4.0</span>
+              <span className="hub-badge-v">v{APP_VERSION}</span>
             </div>
             <span className="hub-tagline">مدير الحافظة والكتابة الذكية المحلي</span>
           </div>

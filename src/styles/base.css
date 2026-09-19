@@ -1,100 +1,199 @@
 /* ============================================================
-   ClipVault — base: tokens, reset, window chrome, scrollbars
+   ClipVault — base.css
+   1. Design tokens (colors, radii, type, motion, shadows)
+   2. Reset + window chrome
+   3. Shared primitives: buttons, icon buttons, chips, fields,
+      switch, segmented control, kbd, badges, tiles, empty
+      states, skeletons, animations
+   Every component in components.css / overlays.css is built
+   from these tokens — no hardcoded colors below this layer.
    ============================================================ */
 
+/* ------------------------------------------------------------
+   1. TOKENS
+   ------------------------------------------------------------ */
+
 :root {
+  /* typography */
   --font: "IBM Plex Sans Arabic", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  --font-mono: var(--mono); /* legacy alias */
 
-  --radius-win: 14px;
-  --radius: 10px;
+  /* type scale */
+  --fs-2xs: 9.5px;
+  --fs-xs: 10.5px;
+  --fs-sm: 11.5px;
+  --fs-md: 12.5px;
+  --fs-base: 13.5px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+
+  /* radius scale */
+  --radius-xs: 5px;
   --radius-sm: 8px;
+  --radius: 10px;        /* legacy alias */
+  --radius-md: 12px;
+  --radius-win: 14px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
 
+  /* motion */
   --ease: cubic-bezier(0.2, 0.9, 0.3, 1);
   --fast: 130ms;
   --anim: 200ms;
+  --slow: 320ms;
+
+  /* layout metrics */
+  --control-h: 30px;
+  --chip-h: 26px;
 }
 
 /* ---------- dark (default) ---------- */
 :root, :root[data-theme="dark"] {
   color-scheme: dark;
+
+  /* surfaces */
   --bg: rgba(15, 16, 20, 0.95);
   --bg-solid: #101115;
   --surface: rgba(255, 255, 255, 0.05);
+  --surface-subtle: rgba(255, 255, 255, 0.035);
   --surface-strong: rgba(255, 255, 255, 0.09);
   --card: #181920;
   --card-hover: #21232c;
   --card-selected: rgba(63, 182, 255, 0.12);
+  --field-bg: rgba(0, 0, 0, 0.28);
+
+  /* borders */
   --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.17);
+
+  /* text */
   --text-1: #f4f6fb;
   --text-2: #b2b7c4;
   --text-3: #7c8292;
+
+  /* accent */
   --accent: #3fb6ff;
   --accent-h: #61c4ff;
   --accent-soft: rgba(63, 182, 255, 0.15);
+  --accent-subtle: rgba(63, 182, 255, 0.28);
+  --accent-rgb: 63, 182, 255;
   --accent-text: #0b0e13;
+  --accent-grad: linear-gradient(180deg, var(--accent-h), var(--accent));
+
+  /* semantic colors (each with soft bg + border derivative) */
   --danger: #ff6b6b;
-  --danger-soft: rgba(255, 107, 107, 0.15);
+  --danger-soft: rgba(255, 107, 107, 0.14);
+  --danger-border: rgba(255, 107, 107, 0.35);
   --warn: #ffb454;
-  --warn-soft: rgba(255, 180, 84, 0.15);
+  --warn-soft: rgba(255, 180, 84, 0.14);
+  --warn-border: rgba(255, 180, 84, 0.35);
   --ok: #4ade80;
+  --ok-soft: rgba(74, 222, 128, 0.13);
+  --ok-border: rgba(74, 222, 128, 0.32);
   --pin: #ffc94d;
+  --pin-soft: rgba(255, 201, 77, 0.16);
+
+  /* section identities (launchpad + nav) */
+  --sec-clipboard: var(--accent);
+  --sec-typing: #c084fc;
+  --sec-typing-soft: rgba(192, 132, 252, 0.16);
+  --sec-vault: #34d399;
+  --sec-vault-soft: rgba(52, 211, 153, 0.14);
+
+  /* misc */
   --mark: rgba(63, 182, 255, 0.32);
+  --scrim: rgba(6, 7, 10, 0.68);
+
+  /* shadows */
   --shadow-win: 0 16px 48px rgba(0, 0, 0, 0.65), 0 4px 14px rgba(0, 0, 0, 0.45);
   --shadow-pop: 0 10px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  --shadow-btn: 0 2px 4px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  --shadow-btn-hover: 0 4px 10px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  --shadow-btn-active: inset 0 2px 4px rgba(0, 0, 0, 0.45);
-  --shadow-card-3d: 0 3px 10px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  --scrim: rgba(6, 7, 10, 0.68);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-card-hover: 0 8px 22px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --shadow-btn: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --shadow-btn-hover: 0 3px 8px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --shadow-btn-active: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+  --glow-accent: 0 0 0 1px var(--accent-subtle), 0 2px 12px rgba(var(--accent-rgb), 0.35);
+  --focus-ring: 0 0 0 3px var(--accent-subtle);
 }
 
 /* ---------- light ---------- */
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: rgba(245, 246, 250, 0.96);
+
+  --bg: rgba(245, 246, 250, 0.97);
   --bg-solid: #f5f6fa;
-  --surface: rgba(15, 23, 42, 0.038);
+  --surface: rgba(15, 23, 42, 0.04);
+  --surface-subtle: rgba(15, 23, 42, 0.028);
   --surface-strong: rgba(15, 23, 42, 0.075);
   --card: #ffffff;
   --card-hover: #f3f5f9;
   --card-selected: rgba(11, 140, 224, 0.10);
+  --field-bg: #ffffff;
+
   --border: rgba(15, 23, 42, 0.10);
-  --border-strong: rgba(15, 23, 42, 0.18);
+  --border-strong: rgba(15, 23, 42, 0.20);
+
   --text-1: #161922;
   --text-2: #525866;
   --text-3: #8a909d;
+
   --accent: #0b8ce0;
-  --accent-h: #0a7cc7;
-  --accent-soft: rgba(11, 140, 224, 0.12);
+  --accent-h: #249ded;
+  --accent-soft: rgba(11, 140, 224, 0.11);
+  --accent-subtle: rgba(11, 140, 224, 0.22);
+  --accent-rgb: 11, 140, 224;
   --accent-text: #ffffff;
+  --accent-grad: linear-gradient(180deg, var(--accent-h), var(--accent));
+
   --danger: #dc4b4b;
-  --danger-soft: rgba(220, 75, 75, 0.12);
+  --danger-soft: rgba(220, 75, 75, 0.10);
+  --danger-border: rgba(220, 75, 75, 0.32);
   --warn: #c07b18;
-  --warn-soft: rgba(192, 123, 24, 0.14);
+  --warn-soft: rgba(192, 123, 84, 0.13);
+  --warn-border: rgba(192, 123, 84, 0.34);
   --ok: #16a34a;
+  --ok-soft: rgba(22, 163, 74, 0.10);
+  --ok-border: rgba(22, 163, 74, 0.30);
   --pin: #d99a10;
+  --pin-soft: rgba(217, 154, 16, 0.14);
+
+  --sec-clipboard: var(--accent);
+  --sec-typing: #9333ea;
+  --sec-typing-soft: rgba(147, 51, 234, 0.10);
+  --sec-vault: #059669;
+  --sec-vault-soft: rgba(5, 150, 105, 0.10);
+
   --mark: rgba(11, 140, 224, 0.25);
-  --shadow-win: 0 14px 44px rgba(20, 30, 60, 0.2), 0 3px 12px rgba(20, 30, 60, 0.1);
-  --shadow-pop: 0 8px 28px rgba(20, 30, 60, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.08);
-  --shadow-btn: 0 2px 4px rgba(20, 30, 60, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  --shadow-btn-hover: 0 4px 8px rgba(20, 30, 60, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --shadow-btn-active: inset 0 2px 3px rgba(20, 30, 60, 0.2);
-  --shadow-card-3d: 0 2px 8px rgba(20, 30, 60, 0.08), 0 1px 2px rgba(20, 30, 60, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  --shadow-card-hover: 0 8px 20px rgba(20, 30, 60, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --scrim: rgba(25, 32, 48, 0.4);
+
+  --shadow-win: 0 14px 44px rgba(20, 30, 60, 0.20), 0 3px 12px rgba(20, 30, 60, 0.10);
+  --shadow-pop: 0 8px 28px rgba(20, 30, 60, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.08);
+  --shadow-modal: 0 24px 64px rgba(20, 30, 60, 0.24), 0 0 0 1px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 1px 4px rgba(20, 30, 60, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow-card-hover: 0 8px 20px rgba(20, 30, 60, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --shadow-btn: 0 1px 2px rgba(20, 30, 60, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-btn-hover: 0 3px 8px rgba(20, 30, 60, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --shadow-btn-active: inset 0 2px 3px rgba(20, 30, 60, 0.18);
+  --shadow-inset: inset 0 1px 3px rgba(20, 30, 60, 0.12);
+  --glow-accent: 0 0 0 1px var(--accent-subtle), 0 2px 12px rgba(var(--accent-rgb), 0.25);
+  --focus-ring: 0 0 0 3px var(--accent-subtle);
 }
 
-/* ---------- reset ---------- */
+/* ------------------------------------------------------------
+   2. RESET + WINDOW CHROME
+   ------------------------------------------------------------ */
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; padding: 0; }
 html { background: transparent; }
 
 body {
   font-family: var(--font);
-  font-size: 13.5px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   color: var(--text-1);
   background: transparent;
@@ -138,19 +237,85 @@ button {
   padding: 0;
   cursor: pointer;
 }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-input, textarea { font-family: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+input, textarea, select { font-family: inherit; }
+
+img { -webkit-user-drag: none; }
 
 /* ---------- scrollbars ---------- */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
-/* ---------- icon buttons ---------- */
+mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* ------------------------------------------------------------
+   3. PRIMITIVES
+   ------------------------------------------------------------ */
+
+/* ---------- 3.1 text button (.btn) ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-btn);
+  transition: all var(--fast) var(--ease);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn:hover {
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-btn-hover);
+}
+.btn:active { box-shadow: var(--shadow-btn-active); transform: translateY(0.5px); }
+.btn:disabled { opacity: 0.5; pointer-events: none; }
+
+.btn.primary {
+  color: var(--accent-text);
+  background: var(--accent-grad);
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.btn.primary:hover {
+  background: var(--accent-grad);
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.btn.danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+}
+.btn.danger:hover { background: rgba(255, 107, 107, 0.2); }
+:root[data-theme="light"] .btn.danger:hover { background: rgba(220, 75, 75, 0.16); }
+.btn.ghost { background: transparent; border-color: transparent; box-shadow: none; }
+.btn.ghost:hover { background: var(--surface); border-color: var(--border); box-shadow: none; }
+.btn.sm { height: 26px; padding: 0 9px; font-size: var(--fs-sm); border-radius: var(--radius-xs); }
+.btn.icon-only { width: var(--control-h); padding: 0; }
+
+/* ---------- 3.2 icon button (.icon-btn) ---------- */
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -161,7 +326,7 @@ input, textarea { font-family: inherit; }
   color: var(--text-2);
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-btn);
   transition: all var(--fast) var(--ease);
   flex-shrink: 0;
   cursor: pointer;
@@ -171,52 +336,383 @@ input, textarea { font-family: inherit; }
   color: var(--text-1);
   border-color: var(--border-strong);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  box-shadow: var(--shadow-btn-hover);
 }
 .icon-btn:active {
   transform: translateY(1px) scale(0.96);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-btn-active);
 }
 .icon-btn.active {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: var(--accent);
-  box-shadow: 0 0 8px rgba(63, 182, 255, 0.3);
+  border-color: var(--accent-subtle);
 }
 .icon-btn.warn {
   color: var(--warn);
   background: var(--warn-soft);
-  border-color: rgba(255, 180, 84, 0.35);
+  border-color: var(--warn-border);
+}
+.icon-btn.on { color: var(--accent); }
+.icon-btn.on svg { fill: var(--accent-soft); }
+
+/* ---------- 3.3 chip / filter pill ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--chip-h);
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: all var(--fast) var(--ease);
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.chip:hover {
+  background: var(--surface-strong);
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+.chip.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-subtle);
+  box-shadow: 0 1px 6px rgba(var(--accent-rgb), 0.18);
+}
+.chip .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 0.25);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.chip-counter {
+  min-width: 17px;
+  height: 15px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  background: var(--surface-strong);
+  color: var(--text-2);
+}
+.chip.active .chip-counter {
+  background: rgba(var(--accent-rgb), 0.25);
+  color: var(--accent);
 }
 
-/* ---------- shared kbd ---------- */
+/* count pill used in nav tabs and menus — same family as chip-counter */
+.tab-count,
+.popover-count-pill,
+.tab-pill-counter {
+  min-width: 17px;
+  height: 15px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  background: rgba(var(--accent-rgb), 0.22);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.tab-pill-counter.warn { background: var(--warn-soft); color: var(--warn); }
+.tab-pill-counter.live { background: var(--danger-soft); color: var(--danger); }
+
+/* ---------- 3.4 segmented control ---------- */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-inset);
+}
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-3);
+  transition: all var(--fast) var(--ease);
+  white-space: nowrap;
+}
+.segmented button:hover { color: var(--text-1); }
+.segmented button.on {
+  color: var(--accent);
+  background: var(--card-hover);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+:root[data-theme="light"] .segmented button.on {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(20, 30, 60, 0.14);
+}
+
+/* ---------- 3.5 switch ---------- */
+.switch {
+  position: relative;
+  width: 34px;
+  height: 19px;
+  border-radius: var(--radius-pill);
+  background: var(--field-bg);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-inset);
+  transition: background var(--anim) var(--ease), border-color var(--fast) var(--ease);
+  flex-shrink: 0;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--text-2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform var(--anim) var(--ease), background var(--fast) var(--ease);
+}
+.switch.on {
+  background: var(--accent-grad);
+  border-color: transparent;
+}
+.switch.on::after {
+  transform: translateX(-15px); /* RTL: knob travels left */
+  background: #ffffff;
+}
+.switch.warn.on { background: var(--warn); }
+
+/* ---------- 3.6 field (inputs / textareas / selects) ---------- */
+input[type="text"],
+input[type="password"],
+input[type="url"],
+input[type="search"],
+input:not([type]),
+textarea,
+.select {
+  height: var(--control-h);
+  padding: 0 10px;
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: var(--fs-md);
+  outline: none;
+  box-shadow: var(--shadow-inset);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+textarea { height: auto; padding: 8px 10px; line-height: 1.55; resize: vertical; }
+input:focus, textarea:focus, .select:focus {
+  border-color: var(--accent-subtle);
+  box-shadow: var(--focus-ring);
+}
+input::placeholder, textarea::placeholder { color: var(--text-3); }
+
+.select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position: calc(0% + 12px) calc(50% - 1.5px), calc(0% + 17px) calc(50% - 1.5px);
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-inline-end: 30px;
+  cursor: pointer;
+}
+
+/* range slider */
+input[type="range"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ---------- 3.7 kbd ---------- */
 kbd {
   font-family: var(--font);
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--text-2);
   background: linear-gradient(180deg, var(--surface-strong) 0%, var(--surface) 100%);
   border: 1px solid var(--border-strong);
-  border-bottom: 2px solid rgba(0, 0, 0, 0.4);
-  border-radius: 5px;
-  padding: 1.5px 6.5px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.35);
+  border-radius: var(--radius-xs);
+  padding: 1.5px 6px;
   line-height: 1.4;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   display: inline-flex;
   align-items: center;
+  white-space: nowrap;
 }
 :root[data-theme="light"] kbd {
-  border-bottom: 2px solid rgba(15, 23, 42, 0.25);
+  border-bottom-color: rgba(15, 23, 42, 0.25);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
-mark {
-  background: var(--mark);
-  color: inherit;
-  border-radius: 3px;
-  padding: 0 1px;
+/* ---------- 3.8 icon tile (shared by kind-ico, vault badges, hub cards…) ---------- */
+.icon-tile,
+.kind-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
+/* ---------- 3.9 empty state ---------- */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 28px 16px;
+  color: var(--text-3);
+}
+.empty-ico {
+  width: 58px;
+  height: 58px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 6px;
+}
+.empty h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--text-2);
+}
+.empty p {
+  margin: 0;
+  font-size: var(--fs-md);
+  max-width: 340px;
+  line-height: 1.6;
+}
+.kbd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* ---------- 3.10 skeleton ---------- */
+.skeleton {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.skel-block {
+  border-radius: var(--radius-xs);
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-strong) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.4s ease infinite;
+}
+@keyframes skel-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* ---------- 3.11 animations (single canonical set) ---------- */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes menu-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes panel-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* utility entrance animation (used by vault cards, modals, popovers) */
+.animate-in { animation: fade-in-up var(--anim) var(--ease) both; }
+.animate-fade-in { animation: fade-in var(--anim) var(--ease) both; }
+
+/* fresh item highlight (new clipboard entry) */
+.card--new {
+  animation: card-in 260ms var(--ease);
+  border-color: var(--accent-subtle);
+  box-shadow: 0 0 0 1px var(--accent-subtle), var(--shadow-card);
+}
+
+/* ------------------------------------------------------------
+   4. REDUCED MOTION
+   ------------------------------------------------------------ */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

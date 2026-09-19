@@ -497,7 +497,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                 <span>المُدخل: {sourceLang === "ar" ? "عربي" : "English"}</span>
                 {looksLikeLayoutMismatch(inputText) && (
                   <span className="mismatch-warning-tag">
-                    <Icon name="alert-triangle" size={11} /> لغة معكوسة!
+                    <Icon name="alertTriangle" size={11} /> لغة معكوسة!
                   </span>
                 )}
               </div>
@@ -729,7 +729,7 @@ export const SmartTypingSuite: React.FC<SmartTypingSuiteProps> = ({
                   style={{
                     color:
                       spellResult.score > 80
-                        ? "var(--success)"
+                        ? "var(--ok)"
                         : spellResult.score > 50
                         ? "var(--warn)"
                         : "var(--danger)",

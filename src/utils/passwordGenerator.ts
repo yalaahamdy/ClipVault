@@ -56,15 +56,15 @@ export function generatePassphrase(wordCount = 4, separator = "-"): string {
 export function getStrengthFeedback(score: number): { label: string; color: string; percent: number } {
   switch (score) {
     case 0:
-      return { label: "ضعيفة جداً", color: "#f87171", percent: 20 };
+      return { label: "ضعيفة جداً", color: "var(--danger)", percent: 20 };
     case 1:
-      return { label: "ضعيفة", color: "#fb923c", percent: 40 };
+      return { label: "ضعيفة", color: "var(--warn)", percent: 40 };
     case 2:
-      return { label: "متوسطة", color: "#facc15", percent: 60 };
+      return { label: "متوسطة", color: "var(--pin)", percent: 60 };
     case 3:
-      return { label: "قوية", color: "#4ade80", percent: 80 };
+      return { label: "قوية", color: "var(--ok)", percent: 80 };
     case 4:
     default:
-      return { label: "خارقة الأمان", color: "#38bdf8", percent: 100 };
+      return { label: "خارقة الأمان", color: "var(--accent)", percent: 100 };
   }
 }

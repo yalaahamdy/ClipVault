@@ -242,6 +242,23 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
     }
   };
 
+  // Close any open modal with Escape (consistent with the rest of the app)
+  useEffect(() => {
+    const anyOpen = editModalOpen || generatorOpen || auditModalOpen || importModalOpen;
+    if (!anyOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      e.preventDefault();
+      setEditModalOpen(false);
+      setGeneratorOpen(false);
+      setAuditModalOpen(false);
+      if (!importing) setImportModalOpen(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [editModalOpen, generatorOpen, auditModalOpen, importModalOpen, importing]);
+
   // Direct import of local file
   const handleDirectImportChrome = async () => {
     setImporting(true);
@@ -707,13 +724,15 @@ export function PasswordVault({ onNotify, onItemCountChange }: PasswordVaultProp
                 {/* Strength Meter (for logins) */}
                 {it.category === "login" && it.password && (
                   <div className="vault-strength-indicator">
-                    <div
-                      className="vault-strength-bar"
-                      style={{
-                        width: `${strength.percent}%`,
-                        backgroundColor: strength.color,
-                      }}
-                    />
+                    <div className="vault-strength-track">
+                      <div
+                        className="vault-strength-bar"
+                        style={{
+                          width: `${strength.percent}%`,
+                          backgroundColor: strength.color,
+                        }}
+                      />
+                    </div>
                     <span style={{ color: strength.color }}>{strength.label}</span>
                   </div>
                 )}

@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { api, vaultApi, PAGE_SIZE } from "./api";
 import type { CollectionWithCount, Item, Settings, SortOption, SourceAppStat, TagWithCount } from "./types";
+import { APP_VERSION } from "./version";
 import { Icon } from "./icons";
 import { ItemCard, type CardActionEvt } from "./components/ItemCard";
 import { ContextMenu, type MenuAction } from "./components/ContextMenu";
@@ -206,6 +207,7 @@ export default function App() {
     const un2 = listen<boolean>("clipvault:paused-changed", (e) => setPaused(e.payload));
     const un3 = listen("clipvault:items-changed", () => { reload({ silent: true }); loadTags(); });
     const un4 = listen("clipvault:open-settings", () => setView("settings"));
+    const un4b = listen("clipvault:help", () => setHelpOpen(true));
     const un5 = listen("clipvault:window-shown", () => {
       // reset overlays and popups on open
       setMenu(null);
@@ -235,6 +237,7 @@ export default function App() {
       un2.then((f) => f());
       un3.then((f) => f());
       un4.then((f) => f());
+      un4b.then((f) => f());
       un5.then((f) => f());
       un6.then((f) => f());
       un7.then((f) => f());
@@ -576,7 +579,7 @@ export default function App() {
             <img src="/icon.png" alt="ClipVault" className="top-brand-icon" />
             <div className="top-brand-text">
               <span className="top-brand-name">ClipVault</span>
-              <span className="top-brand-tag">v1.0</span>
+              <span className="top-brand-tag">v{APP_VERSION}</span>
             </div>
           </div>
 
@@ -673,7 +676,7 @@ export default function App() {
                   <Icon name="x" size={11} />
                 </button>
               )}
-              <kbd>↵ نسخ</kbd>
+              <kbd>↵ لصق</kbd>
             </div>
           </div>
         )}
@@ -885,9 +888,7 @@ export default function App() {
               ))}
               {hasMore && <div ref={sentinelRef} style={{ height: 8 }} />}
               {!hasMore && items.length > 8 && (
-                <div style={{ textAlign: "center", padding: "8px 0 4px", color: "var(--text-3)", fontSize: 11 }}>
-                  نهاية القائمة — استخدم البحث للوصول السريع لأي عنصر
-                </div>
+                <div className="list-end-note">نهاية القائمة — استخدم البحث للوصول السريع لأي عنصر</div>
               )}
             </>
           )}
@@ -900,7 +901,7 @@ export default function App() {
           <span>{loading ? "…" : `${total.toLocaleString("en")} عنصر`}</span>
           <div className="hints">
             <kbd>↑↓</kbd><span>تنقل</span>
-            <kbd>Enter</kbd><span>نسخ</span>
+            <kbd>Enter</kbd><span>لصق</span>
             <kbd>Ctrl+/</kbd><span>الاختصارات</span>
           </div>
         </footer>
@@ -934,27 +935,20 @@ export default function App() {
       {editItem && (
         <div className="preview-overlay" onClick={() => setEditItem(null)}>
           <div
-            className="help-card"
-            style={{ width: 340 }}
+            className="help-card edit-dialog"
             onClick={(e) => e.stopPropagation()}
           >
             <h3><Icon name="edit" size={15} /> تعديل النص</h3>
             <textarea
-              className="selectable"
+              className="selectable edit-dialog-textarea"
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveEdit();
               }}
-              style={{
-                width: "100%", minHeight: 120, resize: "vertical",
-                background: "var(--bg-solid)", border: "1px solid var(--border-strong)",
-                borderRadius: 8, color: "var(--text-1)", padding: 10,
-                fontSize: 13, outline: "none", fontFamily: "inherit",
-              }}
               autoFocus
             />
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-start", marginTop: 10 }}>
+            <div className="edit-dialog-actions">
               <button className="btn primary" onClick={saveEdit}>حفظ (Ctrl+Enter)</button>
               <button className="btn" onClick={() => setEditItem(null)}>إلغاء</button>
             </div>
@@ -973,7 +967,7 @@ export default function App() {
                 <span className="k-keys"><kbd>{shortcut}</kbd></span>
                 <span className="k-desc">البحث الفوري</span>
                 <span className="k-keys"><span style={{ color: "var(--text-3)" }}>اكتب مباشرة</span></span>
-                <span className="k-desc">نسخ العنصر المحدد</span>
+                <span className="k-desc">لصق العنصر المحدد</span>
                 <span className="k-keys"><kbd>Enter</kbd></span>
                 <span className="k-desc">التنقل بين العناصر</span>
                 <span className="k-keys"><kbd>↑</kbd><kbd>↓</kbd></span>

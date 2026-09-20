@@ -29,6 +29,19 @@
           "effects": ["acrylic"],
           "state": "followsWindowActiveState"
         }
+      },
+      {
+        "label": "snip",
+        "title": "ClipVault Snip",
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "shadow": false
       }
     ],
     "security": {

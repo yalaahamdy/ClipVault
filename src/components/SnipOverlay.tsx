@@ -54,7 +54,13 @@ export function SnipOverlay({
 
   useEffect(() => {
     loadFrame();
-    const un = listen("clipvault:snip-frame", () => loadFrame());
+    const un = listen("clipvault:snip-frame", () => {
+      setPhase("select");
+      setSel(null);
+      setDrag(null);
+      setCommitting(false);
+      loadFrame();
+    });
     return () => {
       un.then((f) => f());
     };

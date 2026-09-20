@@ -142,14 +142,6 @@ pub fn begin_snip(app: &AppHandle) -> Result<(), String> {
 }
 
 fn open_snip_window(app: &AppHandle) -> Result<(), String> {
-    // Reuse an existing overlay window (a fresh frame was stored).
-    if let Some(win) = app.get_webview_window("snip") {
-        let _ = win.show();
-        let _ = win.set_focus();
-        let _ = app.emit_to("snip", "clipvault:snip-frame", ());
-        return Ok(());
-    }
-
     let state = app.state::<crate::AppState>();
     let (mx, my, mw, mh) = {
         let guard = state.snip.lock().unwrap_or_else(|e| e.into_inner());
@@ -157,30 +149,36 @@ fn open_snip_window(app: &AppHandle) -> Result<(), String> {
         (s.monitor_x, s.monitor_y, s.width, s.height)
     };
 
-    let win = WebviewWindowBuilder::new(app, "snip", WebviewUrl::App("index.html".into()))
-        .title("ClipVault Snip")
-        .decorations(false)
-        .resizable(false)
-        .maximizable(false)
-        .minimizable(false)
-        .skip_taskbar(true)
-        .always_on_top(true)
-        .shadow(false)
-        .visible(false)
-        .build()
-        .map_err(|e| e.to_string())?;
+    // Reuse the pre-configured snip window from tauri.conf.json or create if absent.
+    let win = if let Some(w) = app.get_webview_window("snip") {
+        w
+    } else {
+        WebviewWindowBuilder::new(app, "snip", WebviewUrl::App("index.html".into()))
+            .title("ClipVault Snip")
+            .decorations(false)
+            .transparent(true)
+            .resizable(false)
+            .maximizable(false)
+            .minimizable(false)
+            .skip_taskbar(true)
+            .always_on_top(true)
+            .shadow(false)
+            .visible(false)
+            .build()
+            .map_err(|e| e.to_string())?
+    };
 
     let _ = win.set_position(PhysicalPosition::new(mx, my));
     let _ = win.set_size(PhysicalSize::new(mw.max(1) as u32, mh.max(1) as u32));
     let _ = win.show();
     let _ = win.set_focus();
+    let _ = app.emit_to("snip", "clipvault:snip-frame", ());
     Ok(())
 }
 
 pub fn close_snip_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("snip") {
         let _ = win.hide();
-        let _ = win.close();
     }
 }
 
@@ -200,25 +198,28 @@ fn commit(
         (s.rgba.clone(), s.width, s.height)
     };
 
-    // CSS px → physical px on the captured buffer (clamped to the frame).
-    let px = |v: f64| -> i32 { (v * dpr).round() as i32 };
-    let x = px(rect.x).clamp(0, (w - 1).max(0));
-    let y = px(rect.y).clamp(0, (h - 1).max(0));
-    let cw = px(rect.w).clamp(1, w - x);
-    let ch = px(rect.h).clamp(1, h - y);
+    let full_w = w.max(1) as u32;
+    let full_h = h.max(1) as u32;
+
+    // CSS px → physical px on the captured buffer (safely clamped to the frame).
+    let px = |v: f64| -> u32 {
+        if v.is_finite() && v > 0.0 {
+            (v * dpr).round() as u32
+        } else {
+            0
+        }
+    };
+    let x = px(rect.x).min(full_w.saturating_sub(1));
+    let y = px(rect.y).min(full_h.saturating_sub(1));
+    let max_w = full_w.saturating_sub(x);
+    let max_h = full_h.saturating_sub(y);
+    let cw = px(rect.w).clamp(1, max_w);
+    let ch = px(rect.h).clamp(1, max_h);
     if cw < 2 || ch < 2 {
         return Err("REGION_TOO_SMALL".into());
     }
 
-    let png = crop_rgba_to_png(
-        &rgba,
-        w.max(1) as u32,
-        h.max(1) as u32,
-        x as u32,
-        y as u32,
-        cw as u32,
-        ch as u32,
-    )?;
+    let png = crop_rgba_to_png(&rgba, full_w, full_h, x, y, cw, ch)?;
 
     store_shot(app, state, png)
 }
@@ -285,19 +286,26 @@ fn store_shot(
     }
 
     // Put the shot on the system clipboard, ready to paste anywhere.
+    // If OCR extracted text, also populate text content for direct pasting.
     let content = crate::clipboard_io::WriteContent {
         kind: "image",
-        text: None,
+        text: ocr_text.as_deref(),
         html: None,
         files: None,
         png: Some(png),
     };
     let _ = crate::clipboard_io::write_to_clipboard(&content);
 
+    // Hide the snip overlay window without destroying it.
     close_snip_window(app);
     {
         let mut guard = state.snip.lock().unwrap_or_else(|e| e.into_inner());
         *guard = None;
+    }
+
+    // Refresh the updated item in main UI
+    if let Ok(Some(item)) = state.lock_db().get_item(id) {
+        let _ = app.emit("clipvault:item-updated", &item);
     }
 
     let has_ocr = ocr_text.is_some();
@@ -310,6 +318,9 @@ fn store_shot(
             ocr_text: ocr_text.clone(),
         },
     );
+
+    // Re-show main popup so user sees the newly captured & OCR'd item
+    crate::show_popup(app);
 
     Ok(SnipCommitResult {
         id,
@@ -340,6 +351,11 @@ fn crop_rgba_to_png(
     ch: u32,
 ) -> Result<Vec<u8>, String> {
     let buf = image::RgbaImage::from_raw(full_w, full_h, rgba.to_vec()).ok_or("BAD_BUFFER")?;
+    let cw = cw.min(full_w.saturating_sub(x));
+    let ch = ch.min(full_h.saturating_sub(y));
+    if cw < 2 || ch < 2 {
+        return Err("REGION_TOO_SMALL".into());
+    }
     let cropped = image::imageops::crop_imm(&buf, x, y, cw, ch).to_image();
     encode_png(&cropped)
 }

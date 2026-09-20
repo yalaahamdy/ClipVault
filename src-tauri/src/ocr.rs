@@ -41,7 +41,11 @@ pub fn find_ocr_executable(app: Option<&AppHandle>) -> Option<PathBuf> {
     // 1. Tauri Resource Directory
     if let Some(app) = app {
         if let Ok(resource_dir) = app.path().resource_dir() {
-            candidates.push(resource_dir.join("OneOcrProfessional").join("OneOcrSuiteProfessional.exe"));
+            candidates.push(
+                resource_dir
+                    .join("OneOcrProfessional")
+                    .join("OneOcrSuiteProfessional.exe"),
+            );
             candidates.push(resource_dir.join("OneOcrSuiteProfessional.exe"));
         }
     }
@@ -49,11 +53,19 @@ pub fn find_ocr_executable(app: Option<&AppHandle>) -> Option<PathBuf> {
     // 2. Relative to current executing binary
     if let Ok(curr_exe) = std::env::current_exe() {
         if let Some(parent) = curr_exe.parent() {
-            candidates.push(parent.join("OneOcrProfessional").join("OneOcrSuiteProfessional.exe"));
+            candidates.push(
+                parent
+                    .join("OneOcrProfessional")
+                    .join("OneOcrSuiteProfessional.exe"),
+            );
             candidates.push(parent.join("OneOcrSuiteProfessional.exe"));
             // If in src-tauri/target/debug
             if let Some(grandparent) = parent.parent().and_then(|p| p.parent()) {
-                candidates.push(grandparent.join("OneOcrProfessional").join("OneOcrSuiteProfessional.exe"));
+                candidates.push(
+                    grandparent
+                        .join("OneOcrProfessional")
+                        .join("OneOcrSuiteProfessional.exe"),
+                );
             }
         }
     }
@@ -61,7 +73,9 @@ pub fn find_ocr_executable(app: Option<&AppHandle>) -> Option<PathBuf> {
     // 3. Current Working Directory and common project locations
     candidates.push(PathBuf::from("OneOcrProfessional").join("OneOcrSuiteProfessional.exe"));
     candidates.push(PathBuf::from("../OneOcrProfessional").join("OneOcrSuiteProfessional.exe"));
-    candidates.push(PathBuf::from(r"D:\Downloads\ClipVault-source\OneOcrProfessional\OneOcrSuiteProfessional.exe"));
+    candidates.push(PathBuf::from(
+        r"D:\Downloads\ClipVault-source\OneOcrProfessional\OneOcrSuiteProfessional.exe",
+    ));
 
     for candidate in candidates {
         if candidate.is_file() {
@@ -78,8 +92,9 @@ pub fn run_ocr_on_file(image_path: &Path, app: Option<&AppHandle>) -> Result<Ocr
         return Err(format!("ملف الصورة غير موجود: {}", image_path.display()));
     }
 
-    let exe_path = find_ocr_executable(app)
-        .ok_or_else(|| "لم يتم العثور على محرك OneOCR (OneOcrSuiteProfessional.exe).".to_string())?;
+    let exe_path = find_ocr_executable(app).ok_or_else(|| {
+        "لم يتم العثور على محرك OneOCR (OneOcrSuiteProfessional.exe).".to_string()
+    })?;
 
     let exe_dir = exe_path
         .parent()
@@ -90,7 +105,8 @@ pub fn run_ocr_on_file(image_path: &Path, app: Option<&AppHandle>) -> Result<Ocr
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    let temp_out = std::env::temp_dir().join(format!("cv_ocr_{}_{}.json", std::process::id(), timestamp));
+    let temp_out =
+        std::env::temp_dir().join(format!("cv_ocr_{}_{}.json", std::process::id(), timestamp));
 
     let mut cmd = std::process::Command::new(&exe_path);
     cmd.current_dir(exe_dir);
@@ -128,8 +144,8 @@ pub fn run_ocr_on_file(image_path: &Path, app: Option<&AppHandle>) -> Result<Ocr
         return Err("لم يقم محرك OneOCR بإنشاء ملف المخرجات المحدد.".to_string());
     }
 
-    let json_bytes = std::fs::read(&temp_out)
-        .map_err(|e| format!("تعذر قراءة مخرجات التعرف الضوئي: {e}"))?;
+    let json_bytes =
+        std::fs::read(&temp_out).map_err(|e| format!("تعذر قراءة مخرجات التعرف الضوئي: {e}"))?;
     let _ = std::fs::remove_file(&temp_out);
 
     let clean_bytes = if json_bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
@@ -202,4 +218,3 @@ mod tests {
         }
     }
 }
-

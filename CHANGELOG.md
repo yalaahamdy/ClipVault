@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.0] - 2026-09-20
+
+### Added
+- **Full Backup Export / Import (نسخ احتياطي وتصدير/استيراد)**: one `.cvbak` envelope file carries the entire history — items, tags, collections and whitelisted settings — with optional AES-256-GCM encryption from a user password (key derived per-export with a fresh salt; the header stays inspectable without the password). Import offers **Merge** (skip existing by content hash) or **Replace** (wipe then restore) modes, restores image files, rebuilds tag/collection links, and reports a full breakdown. The password vault is intentionally excluded (it keeps its own CSV export).
+- **Auto-Updater (التحديث التلقائي)**: `tauri-plugin-updater` integration pinned to the GitHub Releases channel (`latest.json`, minisign-verified with the new embedded public key). Silent check at startup (respects the new `Check automatically at startup` setting), an Updates section in Settings with manual *Check now*, a release-notes card and one-tap **Download & install** followed by an automatic relaunch. Release signing keypair generated; `latest.json` template and the signing workflow are documented in `RELEASING.md`.
+- **Duplicate Cleaner (تنظيف التكرارات)**: a Settings action that merges historical duplicates created before v1.5's hash-based dedup — the survivor keeps the highest flag/usage, counters are summed, `created_at`/`last_used_at` take the min/max, tags & collections are re-pointed, and orphaned images are cleaned. Shows the live duplicate-group count before cleaning.
+- **Screenshot Annotation Editor (تعليق على لقطات الشاشة)**: after dragging a snip region, a floating bar offers *Quick copy* (`Enter`, the instant v1.5 path) or *Annotate & edit* (`A`). The new full-screen canvas editor draws at the crop's native resolution (CSS only scales the view) with: freehand pen, arrows with sized heads, rectangles, ellipses, text (full Arabic shaping via the platform text engine, halo-outlined for readability), mosaic blur, 7-color palette, 3 stroke widths, and unlimited undo/redo (`Ctrl+Z` / `Ctrl+Y`). Saving routes the edited PNG through the same store → OneOCR → clipboard pipeline (`snip_commit_annotated`), with Back-to-selection and Discard actions.
+
+### Changed
+- Duplicate capture already merged rows since v1.5; the new cleaner extends this to legacy rows (Settings → Maintenance & backup).
+- Backup/updater UI is bilingual (Arabic/English) and follows the app-wide i18n system.
+- Version bumped to 1.6.0 across `package.json`, `tauri.conf.json`, `Cargo.toml`, `version.ts`.
+
 ## [1.5.0] - 2026-09-20
 
 ### Added

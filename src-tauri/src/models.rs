@@ -138,4 +138,3 @@ pub struct VaultAuditReport {
     pub weak_item_ids: Vec<i64>,
     pub reused_item_ids: Vec<i64>,
 }
-

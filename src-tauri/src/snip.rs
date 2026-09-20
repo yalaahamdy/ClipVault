@@ -11,7 +11,10 @@
 
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
+use base64::Engine;
+use tauri::{
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder,
+};
 
 use crate::models::now_ms;
 
@@ -96,6 +99,28 @@ pub fn snip_cancel(app: AppHandle, state: tauri::State<'_, crate::AppState>) -> 
     Ok(())
 }
 
+/// Commit an ANNOTATED crop: the webview (SnipAnnotator) renders the edited
+/// crop to a PNG data URL; we decode it and run the exact same store → OCR →
+/// clipboard → notify pipeline as a plain snip (v1.6).
+#[tauri::command]
+pub fn snip_commit_annotated(
+    app: AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+    data_url: String,
+) -> Result<SnipCommitResult, String> {
+    const PREFIX: &str = "data:image/png;base64,";
+    let b64 = data_url
+        .strip_prefix(PREFIX)
+        .ok_or_else(|| "BAD_DATA_URL".to_string())?;
+    let png = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .map_err(|e| e.to_string())?;
+    if png.len() < 64 {
+        return Err("BAD_DATA_URL".into());
+    }
+    store_shot(&app, &state, png)
+}
+
 // ---------------------------------------------------------------- flow
 
 pub fn begin_snip(app: &AppHandle) -> Result<(), String> {
@@ -117,6 +142,14 @@ pub fn begin_snip(app: &AppHandle) -> Result<(), String> {
 }
 
 fn open_snip_window(app: &AppHandle) -> Result<(), String> {
+    // Reuse an existing overlay window (a fresh frame was stored).
+    if let Some(win) = app.get_webview_window("snip") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        let _ = app.emit_to("snip", "clipvault:snip-frame", ());
+        return Ok(());
+    }
+
     let state = app.state::<crate::AppState>();
     let (mx, my, mw, mh) = {
         let guard = state.snip.lock().unwrap_or_else(|e| e.into_inner());
@@ -124,36 +157,30 @@ fn open_snip_window(app: &AppHandle) -> Result<(), String> {
         (s.monitor_x, s.monitor_y, s.width, s.height)
     };
 
-    // Reuse the pre-configured snip window from tauri.conf.json or create if absent.
-    let win = if let Some(w) = app.get_webview_window("snip") {
-        w
-    } else {
-        WebviewWindowBuilder::new(app, "snip", WebviewUrl::App("index.html".into()))
-            .title("ClipVault Snip")
-            .decorations(false)
-            .transparent(true)
-            .resizable(false)
-            .maximizable(false)
-            .minimizable(false)
-            .skip_taskbar(true)
-            .always_on_top(true)
-            .shadow(false)
-            .visible(false)
-            .build()
-            .map_err(|e| e.to_string())?
-    };
+    let win = WebviewWindowBuilder::new(app, "snip", WebviewUrl::App("index.html".into()))
+        .title("ClipVault Snip")
+        .decorations(false)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .skip_taskbar(true)
+        .always_on_top(true)
+        .shadow(false)
+        .visible(false)
+        .build()
+        .map_err(|e| e.to_string())?;
 
     let _ = win.set_position(PhysicalPosition::new(mx, my));
     let _ = win.set_size(PhysicalSize::new(mw.max(1) as u32, mh.max(1) as u32));
     let _ = win.show();
     let _ = win.set_focus();
-    let _ = app.emit_to("snip", "clipvault:snip-frame", ());
     Ok(())
 }
 
 pub fn close_snip_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("snip") {
         let _ = win.hide();
+        let _ = win.close();
     }
 }
 
@@ -162,36 +189,48 @@ fn commit(
     state: &tauri::State<'_, crate::AppState>,
     rect: SnipRect,
 ) -> Result<SnipCommitResult, String> {
-    let dpr = if rect.dpr.is_finite() && rect.dpr > 0.0 { rect.dpr } else { 1.0 };
+    let dpr = if rect.dpr.is_finite() && rect.dpr > 0.0 {
+        rect.dpr
+    } else {
+        1.0
+    };
     let (rgba, w, h) = {
         let guard = state.snip.lock().unwrap_or_else(|e| e.into_inner());
         let s = guard.as_ref().ok_or_else(|| "NO_SESSION".to_string())?;
         (s.rgba.clone(), s.width, s.height)
     };
 
-    let full_w = w.max(1) as u32;
-    let full_h = h.max(1) as u32;
-
-    // CSS px → physical px on the captured buffer (safely clamped to the frame).
-    let px = |v: f64| -> u32 {
-        if v.is_finite() && v > 0.0 {
-            (v * dpr).round() as u32
-        } else {
-            0
-        }
-    };
-    let x = px(rect.x).min(full_w.saturating_sub(1));
-    let y = px(rect.y).min(full_h.saturating_sub(1));
-    let max_w = full_w.saturating_sub(x);
-    let max_h = full_h.saturating_sub(y);
-    let cw = px(rect.w).clamp(1, max_w);
-    let ch = px(rect.h).clamp(1, max_h);
-    if cw < 4 || ch < 4 {
+    // CSS px → physical px on the captured buffer (clamped to the frame).
+    let px = |v: f64| -> i32 { (v * dpr).round() as i32 };
+    let x = px(rect.x).clamp(0, (w - 1).max(0));
+    let y = px(rect.y).clamp(0, (h - 1).max(0));
+    let cw = px(rect.w).clamp(1, w - x);
+    let ch = px(rect.h).clamp(1, h - y);
+    if cw < 2 || ch < 2 {
         return Err("REGION_TOO_SMALL".into());
     }
 
-    let png = crop_rgba_to_png(&rgba, full_w, full_h, x, y, cw, ch)?;
+    let png = crop_rgba_to_png(
+        &rgba,
+        w.max(1) as u32,
+        h.max(1) as u32,
+        x as u32,
+        y as u32,
+        cw as u32,
+        ch as u32,
+    )?;
 
+    store_shot(app, state, png)
+}
+
+/// Store a captured (raw or annotated) shot: dedupe → save → OCR → clipboard →
+/// close the overlay → notify the main window. Shared by `snip_commit` and
+/// `snip_commit_annotated`.
+fn store_shot(
+    app: &AppHandle,
+    state: &tauri::State<'_, crate::AppState>,
+    png: Vec<u8>,
+) -> Result<SnipCommitResult, String> {
     // Same hash scheme as the clipboard monitor (dedupes identical shots).
     let hash = {
         use sha2::{Digest, Sha256};
@@ -199,7 +238,11 @@ fn commit(
         hasher.update(b"image");
         hasher.update([0x1f]);
         hasher.update(&png);
-        hasher.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()
+        hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
     };
 
     let now = now_ms();
@@ -242,26 +285,19 @@ fn commit(
     }
 
     // Put the shot on the system clipboard, ready to paste anywhere.
-    // If OCR extracted text, also populate text content for direct pasting.
     let content = crate::clipboard_io::WriteContent {
         kind: "image",
-        text: ocr_text.as_deref(),
+        text: None,
         html: None,
         files: None,
         png: Some(png),
     };
     let _ = crate::clipboard_io::write_to_clipboard(&content);
 
-    // Hide the snip overlay window without destroying it.
     close_snip_window(app);
     {
         let mut guard = state.snip.lock().unwrap_or_else(|e| e.into_inner());
         *guard = None;
-    }
-
-    // Refresh the updated item in main UI
-    if let Ok(Some(item)) = state.lock_db().get_item(id) {
-        let _ = app.emit("clipvault:item-updated", &item);
     }
 
     let has_ocr = ocr_text.is_some();
@@ -275,10 +311,11 @@ fn commit(
         },
     );
 
-    // Re-show main popup so user sees the newly captured & OCR'd item
-    crate::show_popup(app);
-
-    Ok(SnipCommitResult { id, has_ocr_text: has_ocr, ocr_text })
+    Ok(SnipCommitResult {
+        id,
+        has_ocr_text: has_ocr,
+        ocr_text,
+    })
 }
 
 // ---------------------------------------------------------------- imaging
@@ -303,11 +340,6 @@ fn crop_rgba_to_png(
     ch: u32,
 ) -> Result<Vec<u8>, String> {
     let buf = image::RgbaImage::from_raw(full_w, full_h, rgba.to_vec()).ok_or("BAD_BUFFER")?;
-    let cw = cw.min(full_w.saturating_sub(x));
-    let ch = ch.min(full_h.saturating_sub(y));
-    if cw < 2 || ch < 2 {
-        return Err("REGION_TOO_SMALL".into());
-    }
     let cropped = image::imageops::crop_imm(&buf, x, y, cw, ch).to_image();
     encode_png(&cropped)
 }
@@ -325,7 +357,8 @@ fn rgba_to_png_data_url(rgba: &[u8], w: i32, h: i32) -> Result<String, String> {
 
 fn save_png_files(dir: &std::path::Path, id: i64, png: &[u8]) -> Result<(), String> {
     let img = image::load_from_memory(png).map_err(|e| e.to_string())?;
-    img.save(dir.join(format!("{id}.png"))).map_err(|e| e.to_string())?;
+    img.save(dir.join(format!("{id}.png")))
+        .map_err(|e| e.to_string())?;
     img.thumbnail(320, 320)
         .save(dir.join(format!("{id}_t.png")))
         .map_err(|e| e.to_string())?;
@@ -340,8 +373,8 @@ fn capture_monitor_under_cursor() -> Option<SnipSession> {
     use windows::Win32::Foundation::POINT;
     use windows::Win32::Graphics::Gdi::{
         BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC,
-        GetDIBits, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, SelectObject, SRCCOPY,
-        BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+        GetDIBits, GetMonitorInfoW, MonitorFromPoint, ReleaseDC, SelectObject, BITMAPINFO,
+        BITMAPINFOHEADER, DIB_RGB_COLORS, MONITORINFO, MONITOR_DEFAULTTONEAREST, SRCCOPY,
     };
     use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 

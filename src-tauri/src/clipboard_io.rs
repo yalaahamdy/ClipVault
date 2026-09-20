@@ -48,13 +48,11 @@ pub fn simulate_paste() {
 #[cfg(windows)]
 mod imp {
     use super::{Captured, WriteContent};
-    use clipboard_win::{formats, Clipboard, Getter, Setter, empty, register_format, seq_num};
+    use clipboard_win::{empty, formats, register_format, seq_num, Clipboard, Getter, Setter};
     use windows::core::PWSTR;
     use windows::Win32::Foundation::{GlobalFree, HANDLE};
     use windows::Win32::System::DataExchange::{GetClipboardOwner, SetClipboardData};
-    use windows::Win32::System::Memory::{
-        GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
-    };
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
     use windows::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
         PROCESS_QUERY_LIMITED_INFORMATION,
@@ -101,10 +99,7 @@ mod imp {
         // 2) Images — prefer image when there is no meaningful plain text,
         //    or when rich HTML is present (browser/Office behavior).
         if let Some(p) = &png {
-            let text_noise = text
-                .as_deref()
-                .map(|t| t.trim().is_empty())
-                .unwrap_or(true);
+            let text_noise = text.as_deref().map(|t| t.trim().is_empty()).unwrap_or(true);
             if text_noise || html.is_some() {
                 return Some(Captured {
                     kind: "image".into(),
@@ -145,7 +140,12 @@ mod imp {
         None
     }
 
-    type Formats = (Option<String>, Option<String>, Option<Vec<String>>, Option<Vec<u8>>);
+    type Formats = (
+        Option<String>,
+        Option<String>,
+        Option<Vec<String>>,
+        Option<Vec<u8>>,
+    );
 
     fn read_formats() -> Option<Formats> {
         let _clip = Clipboard::new_attempts(10).ok()?;
@@ -155,7 +155,10 @@ mod imp {
         let mut png: Option<Vec<u8>> = None;
 
         let mut s = String::new();
-        if formats::Unicode.read_clipboard(&mut s).is_ok() && !s.is_empty() && s.len() < MAX_TEXT_BYTES {
+        if formats::Unicode.read_clipboard(&mut s).is_ok()
+            && !s.is_empty()
+            && s.len() < MAX_TEXT_BYTES
+        {
             text = Some(s);
         }
         let mut f: Vec<String> = Vec::new();

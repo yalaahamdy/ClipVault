@@ -1,6 +1,7 @@
 //! ClipVault — fast & elegant clipboard manager for Windows.
 //! App bootstrap: state, tray, global shortcut, popup window management.
 
+mod backup;
 mod clipboard_io;
 mod commands;
 mod db;
@@ -54,6 +55,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // v1.6: auto-updater (GitHub releases latest.json, minisign-verified)
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -153,9 +156,19 @@ pub fn run() {
             commands::typing_get_selected_text,
             commands::add_text_item,
             commands::qr_generate,
+            // v1.6: maintenance, backup, updates
+            commands::count_duplicates,
+            commands::cleanup_duplicates,
+            backup::backup_export,
+            backup::backup_pick_file,
+            backup::backup_inspect,
+            backup::backup_import,
+            commands::update_check,
+            commands::update_install,
             snip::snip_begin,
             snip::snip_get_frame,
             snip::snip_commit,
+            snip::snip_commit_annotated,
             snip::snip_cancel,
         ])
         .setup(|app| {
@@ -294,8 +307,18 @@ fn position_near_cursor(win: &WebviewWindow) {
         // MONITORINFO has no Default impl in windows 0.58 — construct explicitly
         let mut mi = MONITORINFO {
             cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-            rcMonitor: RECT { left: 0, top: 0, right: 0, bottom: 0 },
-            rcWork: RECT { left: 0, top: 0, right: 0, bottom: 0 },
+            rcMonitor: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
+            rcWork: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
             dwFlags: 0,
         };
         // GetMonitorInfoW returns BOOL (not Result) in windows 0.58
@@ -348,7 +371,16 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let sep3 = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
-        &[&show_i, &sep1, &pause_i, &autostart_i, &sep2, &settings_i, &sep3, &quit_i],
+        &[
+            &show_i,
+            &sep1,
+            &pause_i,
+            &autostart_i,
+            &sep2,
+            &settings_i,
+            &sep3,
+            &quit_i,
+        ],
     )?;
 
     let _tray = TrayIconBuilder::with_id("main-tray")
@@ -387,8 +419,14 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     }
 
     let state = app.state::<AppState>();
-    *state.tray_pause_item.lock().unwrap_or_else(|e| e.into_inner()) = Some(pause_i);
-    *state.tray_autostart_item.lock().unwrap_or_else(|e| e.into_inner()) = Some(autostart_i);
+    *state
+        .tray_pause_item
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(pause_i);
+    *state
+        .tray_autostart_item
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(autostart_i);
 
     Ok(())
 }

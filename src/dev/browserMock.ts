@@ -193,6 +193,7 @@ const settings: Record<string, string> = {
   autostart: "0",
   paused: "0",
   lang: "ar",
+  autoUpdate: "1",
 };
 
 const stats = { total: 1248, pinned: 6, favorites: 14, texts: 980, images: 92, links: 140, files: 36 };
@@ -371,6 +372,29 @@ const handlers: Record<string, CmdHandler> = {
     return { id: item.id, hasOcrText: true, ocrText: ocrSample.text };
   },
   snip_cancel: () => {},
+  snip_commit_annotated: () => {
+    const item: MockItem = {
+      id: ++itemIdSeq,
+      kind: "image",
+      text: null,
+      html: null,
+      files: null,
+      image: true,
+      imageData: svgImage("لقطة معلَّقة", "#0f766e", "#22d3ee"),
+      sourceApp: "ClipVault ✂",
+      ocrText: ocrSample.text,
+      pinned: false,
+      favorite: false,
+      sensitive: false,
+      createdAt: Date.now(),
+      lastUsedAt: Date.now(),
+      useCount: 1,
+      tags: [],
+    };
+    items.unshift(item);
+    itemsById.set(item.id, item);
+    return { id: item.id, hasOcrText: true, ocrText: ocrSample.text };
+  },
   qr_generate: (a) => qrDataUrl(String(a?.text ?? "")),
   add_text_item: (a) => {
     const text = String(a?.text ?? "").trim();
@@ -435,6 +459,35 @@ const handlers: Record<string, CmdHandler> = {
   vault_import_csv: () => 12,
   vault_import_from_file_path: () => 12,
   vault_export_csv: () => "name,url,username,password\nGoogle,https://google.com,user,pass",
+  // v1.6: maintenance / backup / updates (browser-simulated)
+  count_duplicates: () => ({ groups: 3 }),
+  cleanup_duplicates: () => {
+    // Fold use_count of duplicate-text rows to look real in QA.
+    const seen = new Set<string>();
+    let removed = 0;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const key = `${items[i].kind}:${items[i].text ?? ""}`;
+      if (seen.has(key)) { items.splice(i, 1); removed++; }
+      else seen.add(key);
+    }
+    return { groups: 0, removed };
+  },
+  backup_export: () => {
+    const path = `C:\\Users\\Demo\\Documents\\ClipVault-Backup-mock.cvbak`;
+    return { path, items: items.length, images: items.filter((i) => i.image).length, encrypted: true, sizeBytes: 482_113 };
+  },
+  backup_pick_file: () => "C:\\Users\\Demo\\Documents\\ClipVault-Backup-mock.cvbak",
+  backup_inspect: () => ({
+    encrypted: true,
+    meta: { items: items.length, images: items.filter((i) => i.image).length, exportedAt: now - 3 * 864e5, appVersion: "1.5.0" },
+  }),
+  backup_import: (a) => {
+    const mode = String(a?.mode ?? "merge");
+    if (mode === "replace") { items.length = 0; itemsById.clear(); }
+    return { added: 42, skipped: mode === "merge" ? 7 : 0, imagesRestored: 5, tagsAdded: 3, collectionsAdded: 1, settingsApplied: 7 };
+  },
+  update_check: () => null,
+  update_install: () => true,
 };
 
 /* ------------------------------------------------------------------ */

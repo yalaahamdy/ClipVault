@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  BackupExportResult,
+  BackupImportResult,
+  BackupInfo,
+  CleanupReport,
   CollectionWithCount,
+  DuplicateStats,
   Item,
   ItemsPage,
   OcrResult,
@@ -13,6 +18,7 @@ import type {
   Stats,
   Tag,
   TagWithCount,
+  UpdateInfo,
   VaultAuditReport,
   VaultCategory,
   VaultItem,
@@ -213,6 +219,56 @@ export const api = {
   /** Store a new text item (transform result / merged text) and copy it to the clipboard. */
   addTextItem(text: string, source?: string): Promise<Item> {
     return call<Item>("add_text_item", { text, source: source ?? null });
+  },
+
+  // ---- v1.6: maintenance / backup / updates ----------------------------------
+
+  /** Store an ANNOTATED snip crop (PNG data URL produced by SnipAnnotator). */
+  snipCommitAnnotated(dataUrl: string): Promise<SnipCommitResult> {
+    return call<SnipCommitResult>("snip_commit_annotated", { dataUrl });
+  },
+
+  /** Number of duplicate-content groups (historical duplicates). */
+  countDuplicates(): Promise<DuplicateStats> {
+    return call<DuplicateStats>("count_duplicates");
+  },
+
+  /** Merge historical duplicate rows. Returns the cleanup report. */
+  cleanupDuplicates(): Promise<CleanupReport> {
+    return call<CleanupReport>("cleanup_duplicates");
+  },
+
+  /** Export a full backup (.cvbak), optionally encrypted. Opens a save dialog. */
+  backupExport(includeImages: boolean, password?: string): Promise<BackupExportResult> {
+    return call<BackupExportResult>("backup_export", {
+      includeImages,
+      password: password?.trim() ? password.trim() : null,
+    });
+  },
+
+  /** Open the native file picker and return the chosen backup path (or null). */
+  backupPickFile(): Promise<string | null> {
+    return call<string | null>("backup_pick_file");
+  },
+
+  /** Read a backup envelope header (no decryption needed). */
+  backupInspect(path: string): Promise<BackupInfo> {
+    return call<BackupInfo>("backup_inspect", { path });
+  },
+
+  /** Import a backup (mode: "merge" | "replace"). */
+  backupImport(path: string, password: string | null, mode: "merge" | "replace"): Promise<BackupImportResult> {
+    return call<BackupImportResult>("backup_import", { path, password, mode });
+  },
+
+  /** Check GitHub releases for a newer version (null = up to date). */
+  updateCheck(): Promise<UpdateInfo | null> {
+    return call<UpdateInfo | null>("update_check");
+  },
+
+  /** Download + install the pending update, then relaunch. */
+  updateInstall(): Promise<boolean> {
+    return call<boolean>("update_install");
   },
 };
 

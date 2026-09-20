@@ -208,6 +208,55 @@ export interface Settings {
   paused: string;
   /** v1.5 — UI language: "ar" (default) | "en" */
   lang?: string;
+  /** v1.6 — check for updates at startup: "1" (default) | "0" */
+  autoUpdate?: string;
+}
+
+// ---- v1.6: backup / maintenance / updates ------------------------------------
+
+export interface BackupMeta {
+  items: number;
+  images: number;
+  exportedAt: number;
+  appVersion: string;
+}
+
+export interface BackupInfo {
+  encrypted: boolean;
+  meta: BackupMeta;
+}
+
+export interface BackupExportResult {
+  path: string;
+  items: number;
+  images: number;
+  encrypted: boolean;
+  sizeBytes: number;
+}
+
+export interface BackupImportResult {
+  added: number;
+  skipped: number;
+  imagesRestored: number;
+  tagsAdded: number;
+  collectionsAdded: number;
+  settingsApplied: number;
+}
+
+export interface DuplicateStats {
+  groups: number;
+}
+
+export interface CleanupReport {
+  groups: number;
+  removed: number;
+}
+
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+  pubDate: string | null;
 }
 
 

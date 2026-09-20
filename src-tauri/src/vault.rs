@@ -68,8 +68,7 @@ pub fn decrypt(cipher_b64: &str, key: &[u8; 32]) -> Result<String, String> {
         .decrypt(nonce, ciphertext)
         .map_err(|_| "Failed to decrypt: invalid key or corrupted data".to_string())?;
 
-    String::from_utf8(plaintext_bytes)
-        .map_err(|e| format!("Corrupted plaintext UTF-8: {}", e))
+    String::from_utf8(plaintext_bytes).map_err(|e| format!("Corrupted plaintext UTF-8: {}", e))
 }
 
 /// Evaluates password strength from 0 (very weak) to 4 (very strong).
@@ -89,7 +88,8 @@ pub fn evaluate_password_strength(password: &str) -> i32 {
     let has_digit = password.chars().any(|c| c.is_ascii_digit());
     let has_special = password.chars().any(|c| !c.is_ascii_alphanumeric());
 
-    let variety = (has_lower as i32) + (has_upper as i32) + (has_digit as i32) + (has_special as i32);
+    let variety =
+        (has_lower as i32) + (has_upper as i32) + (has_digit as i32) + (has_special as i32);
     if variety >= 3 {
         score += 1;
     }
@@ -220,8 +220,10 @@ pub fn generate_chrome_csv(items: &[crate::models::VaultItem]) -> String {
         let username = escape_csv_field(it.username.as_deref().unwrap_or(""));
         let password = escape_csv_field(it.password.as_deref().unwrap_or(""));
         let note = escape_csv_field(it.notes.as_deref().unwrap_or(""));
-        out.push_str(&format!("{},{},{},{},{}\n", name, url, username, password, note));
+        out.push_str(&format!(
+            "{},{},{},{},{}\n",
+            name, url, username, password, note
+        ));
     }
     out
 }
-

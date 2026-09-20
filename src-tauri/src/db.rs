@@ -225,8 +225,7 @@ impl Db {
             _ => {}
         }
         if let Some(tag_id) = q.tag_id {
-            where_sql
-                .push_str(" AND id IN (SELECT item_id FROM item_tags WHERE tag_id = ?)");
+            where_sql.push_str(" AND id IN (SELECT item_id FROM item_tags WHERE tag_id = ?)");
             vals.push(Value::Integer(tag_id));
         }
         if let Some(col_id) = q.collection_id {
@@ -274,9 +273,15 @@ impl Db {
         let order_sql = match q.order_by.as_deref() {
             Some("time_asc") => "pinned DESC, last_used_at ASC, id ASC",
             Some("use_count_desc") => "pinned DESC, use_count DESC, last_used_at DESC",
-            Some("source_asc") => "pinned DESC, LOWER(COALESCE(source_app, 'zzz')) ASC, last_used_at DESC",
-            Some("source_desc") => "pinned DESC, LOWER(COALESCE(source_app, '')) DESC, last_used_at DESC",
-            Some("length_desc") => "pinned DESC, LENGTH(COALESCE(text, '')) DESC, last_used_at DESC",
+            Some("source_asc") => {
+                "pinned DESC, LOWER(COALESCE(source_app, 'zzz')) ASC, last_used_at DESC"
+            }
+            Some("source_desc") => {
+                "pinned DESC, LOWER(COALESCE(source_app, '')) DESC, last_used_at DESC"
+            }
+            Some("length_desc") => {
+                "pinned DESC, LENGTH(COALESCE(text, '')) DESC, last_used_at DESC"
+            }
             Some("alpha_asc") => "pinned DESC, LOWER(COALESCE(text, '')) ASC, last_used_at DESC",
             _ => "pinned DESC, last_used_at DESC, id DESC",
         };
@@ -374,11 +379,14 @@ impl Db {
         let mut stmt = self.conn.prepare(&sql).map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
-                Ok((r.get::<_, i64>(0)?, TagDto {
-                    id: r.get(1)?,
-                    name: r.get(2)?,
-                    color: r.get(3)?,
-                }))
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    TagDto {
+                        id: r.get(1)?,
+                        name: r.get(2)?,
+                        color: r.get(3)?,
+                    },
+                ))
             })
             .map_err(|e| e.to_string())?;
         for row in rows {
@@ -452,7 +460,9 @@ impl Db {
                      WHERE pinned = 0 AND favorite = 0 AND last_used_at < ?1",
                 )
                 .map_err(|e| e.to_string())?;
-            let rows = stmt.query_map(params![cutoff], |r| r.get(0)).map_err(|e| e.to_string())?;
+            let rows = stmt
+                .query_map(params![cutoff], |r| r.get(0))
+                .map_err(|e| e.to_string())?;
             for r in rows {
                 deleted.push(r.map_err(|e| e.to_string())?);
             }
@@ -467,7 +477,9 @@ impl Db {
                      LIMIT -1 OFFSET ?1",
                 )
                 .map_err(|e| e.to_string())?;
-            let rows = stmt.query_map(params![max_items], |r| r.get(0)).map_err(|e| e.to_string())?;
+            let rows = stmt
+                .query_map(params![max_items], |r| r.get(0))
+                .map_err(|e| e.to_string())?;
             for r in rows {
                 deleted.push(r.map_err(|e| e.to_string())?);
             }
@@ -486,12 +498,107 @@ impl Db {
             .map_err(|e| e.to_string())
     }
 
+    /// Number of hash groups that contain more than one row (historical duplicates).
+    pub fn count_duplicate_groups(&self) -> Result<i64, String> {
+        self.conn
+            .query_row(
+                "SELECT COUNT(*) FROM (SELECT hash FROM items GROUP BY hash HAVING COUNT(*) > 1)",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())
+    }
+
+    /// Merges historical duplicates (rows sharing the same hash).
+    /// The survivor of each group is the row that is pinned/favorite, then the
+    /// most used, then the newest. Counters and flags are folded in, tags and
+    /// collections are re-pointed at the survivor. Returns the removed ids so
+    /// the caller can clean up orphaned image files.
+    pub fn dedupe_existing(&self) -> Result<(i64, Vec<i64>), String> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT hash FROM items GROUP BY hash HAVING COUNT(*) > 1")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let mut hashes: Vec<String> = Vec::new();
+        for r in rows {
+            hashes.push(r.map_err(|e| e.to_string())?);
+        }
+        drop(stmt);
+
+        let mut removed: Vec<i64> = Vec::new();
+        for hash in &hashes {
+            let keep: i64 = self
+                .conn
+                .query_row(
+                    "SELECT id FROM items WHERE hash = ?1
+                     ORDER BY (pinned + favorite) DESC, use_count DESC, last_used_at DESC, id ASC
+                     LIMIT 1",
+                    params![hash],
+                    |r| r.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+
+            let others: Vec<i64> = {
+                let mut st = self
+                    .conn
+                    .prepare("SELECT id FROM items WHERE hash = ?1 AND id != ?2")
+                    .map_err(|e| e.to_string())?;
+                let rows = st
+                    .query_map(params![hash, keep], |r| r.get(0))
+                    .map_err(|e| e.to_string())?;
+                rows.map(|r| r.map_err(|e| e.to_string()))
+                    .collect::<Result<Vec<_>, _>>()?
+            };
+
+            for &other in &others {
+                self.conn
+                    .execute(
+                        "INSERT OR IGNORE INTO item_tags(item_id, tag_id)
+                         SELECT ?1, tag_id FROM item_tags WHERE item_id = ?2",
+                        params![keep, other],
+                    )
+                    .map_err(|e| e.to_string())?;
+                self.conn
+                    .execute(
+                        "INSERT OR IGNORE INTO item_collections(item_id, collection_id)
+                         SELECT ?1, collection_id FROM item_collections WHERE item_id = ?2",
+                        params![keep, other],
+                    )
+                    .map_err(|e| e.to_string())?;
+                self.conn
+                    .execute(
+                        "UPDATE items SET
+                           use_count    = use_count + (SELECT use_count   FROM items WHERE id = ?2),
+                           last_used_at = MAX(last_used_at, (SELECT last_used_at FROM items WHERE id = ?2)),
+                           created_at   = MIN(created_at,   (SELECT created_at   FROM items WHERE id = ?2)),
+                           pinned       = MAX(pinned,       (SELECT pinned       FROM items WHERE id = ?2)),
+                           favorite     = MAX(favorite,     (SELECT favorite     FROM items WHERE id = ?2)),
+                           sensitive    = MAX(sensitive,    (SELECT sensitive    FROM items WHERE id = ?2)),
+                           ocr_text     = COALESCE(ocr_text, (SELECT ocr_text   FROM items WHERE id = ?2))
+                         WHERE id = ?1",
+                        params![keep, other],
+                    )
+                    .map_err(|e| e.to_string())?;
+                self.conn
+                    .execute("DELETE FROM items WHERE id = ?1", params![other])
+                    .map_err(|e| e.to_string())?;
+                removed.push(other);
+            }
+        }
+        Ok((hashes.len() as i64, removed))
+    }
+
     pub fn all_ids(&self) -> Result<Vec<i64>, String> {
         let mut stmt = self
             .conn
             .prepare("SELECT id FROM items")
             .map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |r| r.get(0)).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| r.get(0))
+            .map_err(|e| e.to_string())?;
         let mut v = Vec::new();
         for r in rows {
             v.push(r.map_err(|e| e.to_string())?);
@@ -615,13 +722,18 @@ impl Db {
 
     pub fn create_collection(&self, name: &str) -> Result<CollectionDto, String> {
         self.conn
-            .execute("INSERT OR IGNORE INTO collections(name) VALUES(?1)", params![name])
+            .execute(
+                "INSERT OR IGNORE INTO collections(name) VALUES(?1)",
+                params![name],
+            )
             .map_err(|e| e.to_string())?;
         let id: i64 = self
             .conn
-            .query_row("SELECT id FROM collections WHERE name = ?1", params![name], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT id FROM collections WHERE name = ?1",
+                params![name],
+                |r| r.get(0),
+            )
             .map_err(|e| e.to_string())?;
         Ok(CollectionDto {
             id,
@@ -664,6 +776,77 @@ impl Db {
         }
     }
 
+    // ---------- backup / restore (v1.6) ----------
+
+    /// Insert an item with full fidelity (all fields + flags + timestamps),
+    /// used by the backup importer. Returns the new row id.
+    pub fn insert_full_item(&self, item: &crate::backup::BackupItem) -> Result<i64, String> {
+        let files_json = item
+            .files
+            .as_ref()
+            .map(|f| serde_json::to_string(f).unwrap_or_default());
+        self.conn
+            .execute(
+                "INSERT INTO items(kind, text, html, files, image, source_app, ocr_text, hash,
+                                   pinned, favorite, sensitive, created_at, last_used_at, use_count)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                params![
+                    item.kind,
+                    item.text,
+                    item.html,
+                    files_json,
+                    item.image as i64,
+                    item.source_app,
+                    item.ocr_text,
+                    item.hash,
+                    item.pinned as i64,
+                    item.favorite as i64,
+                    item.sensitive as i64,
+                    item.created_at,
+                    item.last_used_at,
+                    item.use_count.max(1),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Wipe the entire clipboard history — items, tags, collections and their
+    /// links (replace-mode import). Settings and the vault are untouched.
+    pub fn wipe_history(&self) -> Result<(), String> {
+        self.conn
+            .execute_batch(
+                "DELETE FROM item_tags;
+                 DELETE FROM item_collections;
+                 DELETE FROM items;
+                 DELETE FROM tags;
+                 DELETE FROM collections;",
+            )
+            .map_err(|e| e.to_string())
+    }
+
+    /// Attach a tag to an item if missing (idempotent).
+    pub fn link_tag(&self, item_id: i64, tag_id: i64) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT OR IGNORE INTO item_tags(item_id, tag_id) VALUES(?1, ?2)",
+                params![item_id, tag_id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Attach a collection to an item if missing (idempotent).
+    pub fn link_collection(&self, item_id: i64, col_id: i64) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT OR IGNORE INTO item_collections(item_id, collection_id) VALUES(?1, ?2)",
+                params![item_id, col_id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     // ---------- stats ----------
 
     pub fn stats(&self) -> Result<crate::models::Stats, String> {
@@ -698,7 +881,9 @@ impl Db {
     pub fn vault_get_security(&self) -> Result<Option<(String, String, i64)>, String> {
         let mut stmt = self
             .conn
-            .prepare("SELECT pin_hash, pin_salt, auto_lock_minutes FROM vault_settings WHERE id = 1")
+            .prepare(
+                "SELECT pin_hash, pin_salt, auto_lock_minutes FROM vault_settings WHERE id = 1",
+            )
             .map_err(|e| e.to_string())?;
         let mut rows = stmt
             .query_map([], |r| {
@@ -879,4 +1064,3 @@ pub struct RawVaultRow {
     pub created_at: i64,
     pub updated_at: i64,
 }
-

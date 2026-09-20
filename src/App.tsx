@@ -296,6 +296,23 @@ export default function App() {
     };
   }, [notify, t]);
 
+  // v1.6: silent update check at boot (respects the autoUpdate setting).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const s = await api.getSettings();
+        if (s.autoUpdate === "0") return;
+      } catch { /* proceed anyway */ }
+      try {
+        const info = await api.updateCheck();
+        if (alive && info) notify(t("toast.updateAvailableToast", { v: info.version }));
+      } catch { /* offline or no endpoint — stay quiet */ }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ---------------- actions ----------------
   const doCopy = useCallback(async (item: Item) => {
     try {

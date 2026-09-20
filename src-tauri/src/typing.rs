@@ -262,7 +262,9 @@ pub fn fix_selected_text_in_active_window() -> Result<String, String> {
     // 2. Read selection from clipboard
     let _clip = Clipboard::new_attempts(10).map_err(|e| e.to_string())?;
     let mut current_text = String::new();
-    formats::Unicode.read_clipboard(&mut current_text).map_err(|e| e.to_string())?;
+    formats::Unicode
+        .read_clipboard(&mut current_text)
+        .map_err(|e| e.to_string())?;
 
     if current_text.trim().is_empty() {
         return Err("لم يتم تحديد أي نص في التطبيق النشط.".to_string());

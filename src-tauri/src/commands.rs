@@ -126,7 +126,11 @@ pub fn get_items(state: State<crate::AppState>, q: ItemsQuery) -> Result<ItemsPa
 }
 
 #[tauri::command]
-pub fn get_item_image(state: State<crate::AppState>, id: i64, thumb: bool) -> Result<String, String> {
+pub fn get_item_image(
+    state: State<crate::AppState>,
+    id: i64,
+    thumb: bool,
+) -> Result<String, String> {
     let name = if thumb {
         format!("{id}_t.png")
     } else {
@@ -142,15 +146,9 @@ pub fn get_item_image(state: State<crate::AppState>, id: i64, thumb: bool) -> Re
 
 #[tauri::command]
 pub fn copy_item(state: State<crate::AppState>, id: i64) -> Result<bool, String> {
-    let item = state
-        .lock_db()
-        .get_item(id)?
-        .ok_or("العنصر غير موجود")?;
+    let item = state.lock_db().get_item(id)?.ok_or("العنصر غير موجود")?;
     let png = if item.image {
-        Some(
-            std::fs::read(state.images_dir.join(format!("{id}.png")))
-                .map_err(|e| e.to_string())?,
-        )
+        Some(std::fs::read(state.images_dir.join(format!("{id}.png"))).map_err(|e| e.to_string())?)
     } else {
         None
     };
@@ -240,7 +238,11 @@ pub fn get_tags(state: State<crate::AppState>) -> Result<Vec<TagWithCount>, Stri
 }
 
 #[tauri::command]
-pub fn create_tag(state: State<crate::AppState>, name: String, color: String) -> Result<TagDto, String> {
+pub fn create_tag(
+    state: State<crate::AppState>,
+    name: String,
+    color: String,
+) -> Result<TagDto, String> {
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("اسم الوسم فارغ".into());
@@ -279,7 +281,10 @@ pub fn get_collections(state: State<crate::AppState>) -> Result<Vec<CollectionWi
 }
 
 #[tauri::command]
-pub fn create_collection(state: State<crate::AppState>, name: String) -> Result<CollectionDto, String> {
+pub fn create_collection(
+    state: State<crate::AppState>,
+    name: String,
+) -> Result<CollectionDto, String> {
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("اسم المجموعة فارغ".into());
@@ -301,13 +306,18 @@ pub fn toggle_item_collection(
     item_id: i64,
     collection_id: i64,
 ) -> Result<bool, String> {
-    state.lock_db().toggle_item_collection(item_id, collection_id)
+    state
+        .lock_db()
+        .toggle_item_collection(item_id, collection_id)
 }
 
 // ---------------------------------------------------------------- settings
 
 #[tauri::command]
-pub fn get_settings(app: AppHandle, state: State<crate::AppState>) -> Result<HashMap<String, String>, String> {
+pub fn get_settings(
+    app: AppHandle,
+    state: State<crate::AppState>,
+) -> Result<HashMap<String, String>, String> {
     use tauri_plugin_autostart::ManagerExt;
     let db = state.lock_db();
     let mut map = HashMap::new();
@@ -321,6 +331,7 @@ pub fn get_settings(app: AppHandle, state: State<crate::AppState>) -> Result<Has
         "firstRun",
         "paused",
         "lang",
+        "autoUpdate",
     ] {
         map.insert(key.to_string(), db.get_setting(key).unwrap_or_default());
     }
@@ -411,26 +422,29 @@ pub fn frontend_ready(app: AppHandle, state: State<crate::AppState>) -> Result<(
 #[tauri::command]
 pub fn open_item(app: AppHandle, state: State<crate::AppState>, id: i64) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let item = state
-        .lock_db()
-        .get_item(id)?
-        .ok_or("العنصر غير موجود")?;
+    let item = state.lock_db().get_item(id)?.ok_or("العنصر غير موجود")?;
     let opener = app.opener();
     match item.kind.as_str() {
         "link" => {
             let url = item.text.unwrap_or_default();
-            opener.open_url(url, None::<&str>).map_err(|e| e.to_string())?;
+            opener
+                .open_url(url, None::<&str>)
+                .map_err(|e| e.to_string())?;
         }
         "files" => {
             if let Some(first) = item.files.and_then(|f| f.into_iter().next()) {
-                opener.open_path(first, None::<&str>).map_err(|e| e.to_string())?;
+                opener
+                    .open_path(first, None::<&str>)
+                    .map_err(|e| e.to_string())?;
             }
         }
         "text" => {
             let t = item.text.unwrap_or_default();
             let p = PathBuf::from(t.trim());
             if p.exists() {
-                opener.open_path(p.to_string_lossy().to_string(), None::<&str>).map_err(|e| e.to_string())?;
+                opener
+                    .open_path(p.to_string_lossy().to_string(), None::<&str>)
+                    .map_err(|e| e.to_string())?;
             }
         }
         _ => {}
@@ -441,13 +455,13 @@ pub fn open_item(app: AppHandle, state: State<crate::AppState>, id: i64) -> Resu
 #[tauri::command]
 pub fn reveal_item(app: AppHandle, state: State<crate::AppState>, id: i64) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let item = state
-        .lock_db()
-        .get_item(id)?
-        .ok_or("العنصر غير موجود")?;
+    let item = state.lock_db().get_item(id)?.ok_or("العنصر غير موجود")?;
     let opener = app.opener();
     let target: Option<PathBuf> = match item.kind.as_str() {
-        "files" => item.files.and_then(|f| f.into_iter().next()).map(PathBuf::from),
+        "files" => item
+            .files
+            .and_then(|f| f.into_iter().next())
+            .map(PathBuf::from),
         "image" => Some(state.images_dir.join(format!("{id}.png"))),
         "text" => {
             let t = item.text.unwrap_or_default();
@@ -471,7 +485,11 @@ pub fn reveal_item(app: AppHandle, state: State<crate::AppState>, id: i64) -> Re
 }
 
 #[tauri::command]
-pub fn save_image(app: AppHandle, state: State<crate::AppState>, id: i64) -> Result<Option<String>, String> {
+pub fn save_image(
+    app: AppHandle,
+    state: State<crate::AppState>,
+    id: i64,
+) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let src = state.images_dir.join(format!("{id}.png"));
     if !src.exists() {
@@ -548,7 +566,10 @@ pub fn vault_get_status(state: State<crate::AppState>) -> Result<VaultStatus, St
 }
 
 #[tauri::command]
-pub fn vault_setup_master(pin: String, state: State<crate::AppState>) -> Result<VaultStatus, String> {
+pub fn vault_setup_master(
+    pin: String,
+    state: State<crate::AppState>,
+) -> Result<VaultStatus, String> {
     let clean_pin = pin.trim();
     if clean_pin.len() < 4 {
         return Err("يجب أن يتكون رمز المرور من 4 خانات على الأقل".into());
@@ -692,7 +713,9 @@ pub fn vault_get_items(
 
     let raw_rows = state.lock_db().vault_get_all_raw()?;
     let query_lower = query.as_deref().map(|q| q.to_lowercase());
-    let filter_cat = category.as_deref().filter(|c| *c != "all" && *c != "favorite");
+    let filter_cat = category
+        .as_deref()
+        .filter(|c| *c != "all" && *c != "favorite");
 
     let mut items = Vec::new();
 
@@ -956,7 +979,9 @@ pub fn clipboard_clear_secret(expected_text: String) -> Result<(), String> {
 pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let opener = app.opener();
-    opener.open_url(url, None::<&str>).map_err(|e| e.to_string())?;
+    opener
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1031,8 +1056,8 @@ pub fn vault_import_from_file_path(
     path: String,
     state: State<crate::AppState>,
 ) -> Result<usize, String> {
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| format!("فشل في قراءة ملف CSV: {}", e))?;
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| format!("فشل في قراءة ملف CSV: {}", e))?;
     vault_import_csv(content, state)
 }
 
@@ -1113,10 +1138,7 @@ pub fn ocr_extract_text(
 }
 
 #[tauri::command]
-pub fn ocr_extract_file(
-    app: AppHandle,
-    path: String,
-) -> Result<crate::ocr::OcrResult, String> {
+pub fn ocr_extract_file(app: AppHandle, path: String) -> Result<crate::ocr::OcrResult, String> {
     let p = PathBuf::from(path);
     crate::ocr::run_ocr_on_file(&p, Some(&app))
 }
@@ -1143,12 +1165,6 @@ pub fn typing_inject_text(text: String) -> Result<bool, String> {
 pub fn typing_get_selected_text() -> Result<String, String> {
     Ok(crate::typing::get_selected_text_from_active_window())
 }
-
-
-
-
-
-
 
 // ---------------------------------------------------------------- v1.5: transform results / merged items / QR
 
@@ -1183,7 +1199,10 @@ pub fn add_text_item(
         h.update(b"text");
         h.update([0x1f]);
         h.update(trimmed.as_bytes());
-        h.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()
+        h.finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
     };
 
     let now = now_ms();
@@ -1219,4 +1238,103 @@ pub fn add_text_item(
 #[tauri::command]
 pub fn qr_generate(text: String) -> Result<String, String> {
     crate::qr::png_data_url(&text)
+}
+
+// ---------------------------------------------------------------- v1.6: duplicate cleanup
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateStats {
+    pub groups: i64,
+}
+
+#[tauri::command]
+pub fn count_duplicates(state: State<crate::AppState>) -> Result<DuplicateStats, String> {
+    Ok(DuplicateStats {
+        groups: state.lock_db().count_duplicate_groups()?,
+    })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupReport {
+    pub groups: i64,
+    pub removed: i64,
+}
+
+#[tauri::command]
+pub fn cleanup_duplicates(
+    app: AppHandle,
+    state: State<crate::AppState>,
+) -> Result<CleanupReport, String> {
+    let (groups, removed) = state.lock_db().dedupe_existing()?;
+    for id in &removed {
+        cleanup_images(&state.images_dir, *id);
+    }
+    if !removed.is_empty() {
+        let _ = app.emit("clipvault:items-changed", ());
+    }
+    Ok(CleanupReport {
+        groups,
+        removed: removed.len() as i64,
+    })
+}
+
+// ---------------------------------------------------------------- v1.6: auto-update
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInfo {
+    pub version: String,
+    pub current_version: String,
+    pub notes: Option<String>,
+    pub pub_date: Option<String>,
+}
+
+/// Check GitHub releases for a newer version (via tauri-plugin-updater).
+/// Returns Ok(None) when the app is already up to date.
+#[tauri::command]
+pub async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("UPDATE_CHECK_FAILED: {e}"))?;
+    Ok(update.map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current_version: u.current_version.clone(),
+        notes: u.body.clone(),
+        pub_date: u.date.map(|d| d.to_string()),
+    }))
+}
+
+/// Download + install the pending update and relaunch the app.
+#[tauri::command]
+pub async fn update_install(app: AppHandle) -> Result<bool, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("UPDATE_CHECK_FAILED: {e}"))?
+        .ok_or_else(|| "UPDATE_NOT_AVAILABLE".to_string())?;
+
+    let mut downloaded: u64 = 0;
+    update
+        .download_and_install(
+            |chunk, total| {
+                downloaded += chunk as u64;
+                let _ = total; // progress reporting hook (future: emit to UI)
+                let _ = downloaded;
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| format!("UPDATE_INSTALL_FAILED: {e}"))?;
+
+    // Relaunch into the new version (never returns on success).
+    app.restart();
+    #[allow(unreachable_code)]
+    Ok(true)
 }

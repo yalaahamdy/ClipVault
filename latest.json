@@ -1,0 +1,11 @@
+{
+  "version": "1.6.0",
+  "notes": "ClipVault v1.6.0: Full Backup Export/Import (.cvbak with optional AES-256-GCM encryption), Auto-Updater channel, Duplicate Cleaner, and Screenshot Annotation Editor (Pen, Arrows, Shapes, Text with Arabic shaping, Blur).",
+  "pub_date": "2026-09-20T10:05:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "",
+      "url": "https://github.com/yalaahamdy/ClipVault/releases/download/v1.6.0/ClipVault_1.6.0_x64-setup.exe"
+    }
+  }
+}

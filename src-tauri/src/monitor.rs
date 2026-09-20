@@ -149,7 +149,9 @@ fn save_images(dir: &Path, id: i64, png: &[u8]) {
         return;
     };
     let _ = img.save(dir.join(format!("{id}.png")));
-    let _ = img.thumbnail(320, 320).save(dir.join(format!("{id}_t.png")));
+    let _ = img
+        .thumbnail(320, 320)
+        .save(dir.join(format!("{id}_t.png")));
 }
 
 #[cfg(test)]

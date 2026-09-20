@@ -364,6 +364,36 @@ const P: Record<string, JSX.Element> = {
       <path d="M5 6v4M19 14v4M10 2v2M7 8H3M21 16h-4M11 3H9" />
     </>
   ),
+  // v1.6 — snip annotation tools
+  pen: (
+    <>
+      <path d="m12 19 7-7 3 3-7 7-3-3Z" />
+      <path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5Z" />
+      <path d="m2 2 7.586 7.586" />
+      <circle cx="11" cy="11" r="2" />
+    </>
+  ),
+  annotArrow: (
+    <>
+      <path d="M5 19 19 5" />
+      <path d="M13 5h6v6" />
+    </>
+  ),
+  square: <rect x="4" y="4" width="16" height="16" rx="2" />,
+  circle: <circle cx="12" cy="12" r="9" />,
+  droplet: <path d="M12 2.7 6.4 8.3a8 8 0 1 0 11.2 0L12 2.7Z" />,
+  undo: (
+    <>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </>
+  ),
+  redo: (
+    <>
+      <path d="m15 14 5-5-5-5" />
+      <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof P | string;

@@ -10,8 +10,8 @@
 //! 4. `snip_cancel` (or Esc in the overlay) aborts the session.
 
 use std::sync::Mutex;
-
 use base64::Engine;
+
 use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder,
 };
@@ -141,6 +141,7 @@ pub fn begin_snip(app: &AppHandle) -> Result<(), String> {
     open_snip_window(app)
 }
 
+#[cfg(desktop)]
 fn open_snip_window(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<crate::AppState>();
     let (mx, my, mw, mh) = {
@@ -165,7 +166,7 @@ fn open_snip_window(app: &AppHandle) -> Result<(), String> {
             .shadow(false)
             .visible(false)
             .build()
-            .map_err(|e| e.to_string())?
+            .map_err(|e: tauri::Error| e.to_string())?
     };
 
     let _ = win.set_position(PhysicalPosition::new(mx, my));
@@ -174,6 +175,11 @@ fn open_snip_window(app: &AppHandle) -> Result<(), String> {
     let _ = win.set_focus();
     let _ = app.emit_to("snip", "clipvault:snip-frame", ());
     Ok(())
+}
+
+#[cfg(not(desktop))]
+fn open_snip_window(_app: &AppHandle) -> Result<(), String> {
+    Err("SNIP_NOT_SUPPORTED_ON_MOBILE".into())
 }
 
 pub fn close_snip_window(app: &AppHandle) {
@@ -286,17 +292,15 @@ fn store_shot(
     }
 
     // Put the shot on the system clipboard, ready to paste anywhere.
-    // If OCR extracted text, also populate text content for direct pasting.
     let content = crate::clipboard_io::WriteContent {
         kind: "image",
-        text: ocr_text.as_deref(),
+        text: None,
         html: None,
         files: None,
         png: Some(png),
     };
     let _ = crate::clipboard_io::write_to_clipboard(&content);
 
-    // Hide the snip overlay window without destroying it.
     close_snip_window(app);
     {
         let mut guard = state.snip.lock().unwrap_or_else(|e| e.into_inner());

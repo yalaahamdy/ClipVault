@@ -26,6 +26,7 @@ import { Toast } from "./components/Toast";
 import { QrModal } from "./components/QrModal";
 import { MergeModal, SelectionBar } from "./components/Selection";
 import { SnipOverlay } from "./components/SnipOverlay";
+import { FloatingQuickAccess } from "./components/FloatingQuickAccess";
 import { transformById, TransformError } from "./utils/transforms";
 import { fmtNum, useI18n, type Lang } from "./i18n";
 
@@ -101,6 +102,26 @@ export default function App() {
   stateRef.current = { query, filter, orgFilter, sortBy, sourceFilter };
 
   const notify = useCallback((msg: string, err?: boolean) => setToast({ msg, err }), []);
+
+  // Floating quick-access bar state for mobile / instant touch
+  const [floatingBarEnabled, setFloatingBarEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("clipvault_floating_enabled") !== "false";
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleFloatingBar = useCallback(() => {
+    setFloatingBarEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("clipvault_floating_enabled", next ? "true" : "false");
+      } catch { /* ignore */ }
+      notify(next ? (lang === "ar" ? "تم تفعيل شريط الوصول السريع والقائمة الدائرية" : "Quick access orb enabled") : (lang === "ar" ? "تم إخفاء شريط الوصول السريع" : "Quick access orb hidden"));
+      return next;
+    });
+  }, [notify, lang]);
 
   // ---------------- theme ----------------
   const applyTheme = useCallback((th: string) => {
@@ -1086,6 +1107,8 @@ export default function App() {
           onClearHistory={clearAll}
           onNotify={notify}
           onSnip={beginSnip}
+          floatingBarEnabled={floatingBarEnabled}
+          onToggleFloatingBar={toggleFloatingBar}
         />
       )}
 
@@ -1301,6 +1324,26 @@ export default function App() {
       )}
 
       {toast && <Toast msg={toast.msg} error={toast.err} onDone={() => setToast(null)} />}
+
+      {/* Floating Quick-Access Orb & 3D Radial Menu for Mobile & Touch */}
+      <FloatingQuickAccess
+        enabled={floatingBarEnabled}
+        totalItems={total}
+        onNavigate={(targetView) => setView(targetView)}
+        onTriggerSearch={() => {
+          setView("list");
+          setTimeout(() => searchRef.current?.focus(), 60);
+        }}
+        onQuickAdd={async (text) => {
+          try {
+            await api.addTextItem(text);
+            await reload({ silent: true });
+            notify(lang === "ar" ? "تمت إضافة النص ونسخه للحافظة بنجاح" : "Text added & copied to clipboard");
+          } catch (e: any) {
+            notify(String(e), true);
+          }
+        }}
+      />
 
       {/* Ctrl+T theme shortcut */}
       <HotKeyT onToggle={() => applySettingsPatch({ theme: settings?.theme === "light" ? "dark" : "light" })} />

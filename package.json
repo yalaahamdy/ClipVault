@@ -1,8 +1,8 @@
 {
   "name": "clipvault",
   "private": true,
-  "version": "1.6.0",
-  "description": "ClipVault — مدير حافظة سريع وأنيق لنظام Windows",
+  "version": "1.7.0",
+  "description": "ClipVault — مدير حافظة سريع وأنيق لنظامي Windows و Android",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -18,7 +18,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
+#[cfg(desktop)]
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+#[cfg(desktop)]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
@@ -31,7 +33,9 @@ pub struct AppState {
     pub images_dir: PathBuf,
     /// True while a native (blocking) dialog is open — suppresses hide-on-blur.
     pub dialog_open: AtomicBool,
+    #[cfg(desktop)]
     pub tray_pause_item: Mutex<Option<MenuItem<tauri::Wry>>>,
+    #[cfg(desktop)]
     pub tray_autostart_item: Mutex<Option<CheckMenuItem<tauri::Wry>>>,
     pub vault_key: Mutex<Option<[u8; 32]>>,
     /// Pending region-screenshot session (v1.5).
@@ -47,60 +51,69 @@ impl AppState {
     }
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        // Must be the first plugin: focuses the existing window on second launch
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            show_popup(app);
-        }))
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        // v1.6: auto-updater (GitHub releases latest.json, minisign-verified)
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, shortcut, event| {
-                    use tauri_plugin_global_shortcut::ShortcutState;
-                    if event.state == ShortcutState::Pressed {
-                        // Route by the shortcut's final key token ("shift" contains
-                        // both "s" and "h", so substring matching would misfire).
-                        let sc_str = format!("{shortcut}");
-                        let token = sc_str
-                            .to_lowercase()
-                            .rsplit('+')
-                            .next()
-                            .unwrap_or("")
-                            .trim()
-                            .to_string();
-                        let is_main = {
-                            let state = app.state::<AppState>();
-                            let main = state
-                                .main_shortcut
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner())
-                                .clone();
-                            sc_str.to_lowercase() == main.to_lowercase()
-                        };
-                        if is_main {
-                            show_popup(app);
-                        } else if token == "x" {
-                            let selected_text =
-                                crate::typing::get_selected_text_from_active_window();
-                            show_popup_force(app);
-                            let _ = app.emit("clipvault:open-spellcheck-with-text", selected_text);
-                        } else if token == "s" {
-                            let _ = crate::snip::begin_snip(app);
-                        } else {
-                            show_popup(app);
+        .plugin(tauri_plugin_opener::init());
+
+    #[cfg(desktop)]
+    {
+        builder = builder
+            // Must be the first plugin: focuses the existing window on second launch
+            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                show_popup(app);
+            }))
+            // v1.6: auto-updater (GitHub releases latest.json, minisign-verified)
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                None,
+            ))
+            .plugin(
+                tauri_plugin_global_shortcut::Builder::new()
+                    .with_handler(|app, shortcut, event| {
+                        use tauri_plugin_global_shortcut::ShortcutState;
+                        if event.state == ShortcutState::Pressed {
+                            // Route by the shortcut's final key token ("shift" contains
+                            // both "s" and "h", so substring matching would misfire).
+                            let sc_str = format!("{shortcut}");
+                            let token = sc_str
+                                .to_lowercase()
+                                .rsplit('+')
+                                .next()
+                                .unwrap_or("")
+                                .trim()
+                                .to_string();
+                            let is_main = {
+                                let state = app.state::<AppState>();
+                                let main = state
+                                    .main_shortcut
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner())
+                                    .clone();
+                                sc_str.to_lowercase() == main.to_lowercase()
+                            };
+                            if is_main {
+                                show_popup(app);
+                            } else if token == "x" {
+                                let selected_text =
+                                    crate::typing::get_selected_text_from_active_window();
+                                show_popup_force(app);
+                                let _ = app.emit("clipvault:open-spellcheck-with-text", selected_text);
+                            } else if token == "s" {
+                                let _ = crate::snip::begin_snip(app);
+                            } else {
+                                show_popup(app);
+                            }
                         }
-                    }
-                })
-                .build(),
-        )
+                    })
+                    .build(),
+            );
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![
             commands::get_items,
             commands::get_item_image,
@@ -191,24 +204,30 @@ pub fn run() {
                 paused: AtomicBool::new(paused),
                 images_dir: data_dir.join("images"),
                 dialog_open: AtomicBool::new(false),
+                #[cfg(desktop)]
                 tray_pause_item: Mutex::new(None),
+                #[cfg(desktop)]
                 tray_autostart_item: Mutex::new(None),
                 vault_key: Mutex::new(None),
                 snip: Mutex::new(None),
                 main_shortcut: Mutex::new(shortcut.clone()),
             });
 
-            setup_tray(&handle)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-            register_shortcut(&handle, &shortcut)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            #[cfg(desktop)]
+            {
+                setup_tray(&handle)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                register_shortcut(&handle, &shortcut)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            }
 
             monitor::spawn(handle.clone());
 
             // Startup pruning (retention + max items)
             let _ = commands::prune_now(&handle);
 
-            // Hide popup when it loses focus (native dialogs excluded)
+            // Hide popup when it loses focus (desktop only)
+            #[cfg(desktop)]
             if let Some(win) = handle.get_webview_window("main") {
                 let h = handle.clone();
                 win.on_window_event(move |event| {
@@ -230,6 +249,12 @@ pub fn run() {
                 });
             }
 
+            // On mobile, show the main window immediately
+            #[cfg(mobile)]
+            if let Some(win) = handle.get_webview_window("main") {
+                let _ = win.show();
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -237,6 +262,7 @@ pub fn run() {
 }
 
 /// Register (or re-register) the global shortcuts.
+#[cfg(desktop)]
 pub fn register_shortcut(app: &AppHandle, shortcut_str: &str) -> Result<(), String> {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let gs = app.global_shortcut();
@@ -260,6 +286,11 @@ pub fn register_shortcut(app: &AppHandle, shortcut_str: &str) -> Result<(), Stri
     if norm != "ctrl+shift+s" {
         let _ = gs.register("Ctrl+Shift+S");
     }
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+pub fn register_shortcut(_app: &AppHandle, _shortcut_str: &str) -> Result<(), String> {
     Ok(())
 }
 
@@ -348,11 +379,15 @@ fn position_near_cursor(win: &WebviewWindow) {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(desktop, not(windows)))]
 fn position_near_cursor(win: &WebviewWindow) {
     let _ = win.center();
 }
 
+#[cfg(mobile)]
+fn position_near_cursor(_win: &WebviewWindow) {}
+
+#[cfg(desktop)]
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let show_i = MenuItem::with_id(app, "tray-show", "إظهار ClipVault", true, None::<&str>)?;
     let pause_i = MenuItem::with_id(app, "tray-pause", "إيقاف التسجيل مؤقتًا", true, None::<&str>)?;

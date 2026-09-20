@@ -72,6 +72,7 @@ pub fn set_paused_internal(app: &AppHandle, paused: bool) {
         let db = state.lock_db();
         let _ = db.set_setting("paused", if paused { "1" } else { "0" });
     }
+    #[cfg(desktop)]
     if let Some(item) = state
         .tray_pause_item
         .lock()
@@ -93,6 +94,7 @@ pub fn toggle_pause(app: &AppHandle) {
     set_paused_internal(app, now);
 }
 
+#[cfg(desktop)]
 pub fn toggle_autostart(app: &AppHandle) {
     use tauri_plugin_autostart::ManagerExt;
     let auto = app.autolaunch();
@@ -117,6 +119,9 @@ pub fn toggle_autostart(app: &AppHandle) {
         }
     }
 }
+
+#[cfg(not(desktop))]
+pub fn toggle_autostart(_app: &AppHandle) {}
 
 // ---------------------------------------------------------------- items
 
@@ -318,7 +323,6 @@ pub fn get_settings(
     app: AppHandle,
     state: State<crate::AppState>,
 ) -> Result<HashMap<String, String>, String> {
-    use tauri_plugin_autostart::ManagerExt;
     let db = state.lock_db();
     let mut map = HashMap::new();
     for key in [
@@ -335,7 +339,17 @@ pub fn get_settings(
     ] {
         map.insert(key.to_string(), db.get_setting(key).unwrap_or_default());
     }
-    let auto = app.autolaunch().is_enabled().unwrap_or(false);
+    let auto = {
+        #[cfg(desktop)]
+        {
+            use tauri_plugin_autostart::ManagerExt;
+            app.autolaunch().is_enabled().unwrap_or(false)
+        }
+        #[cfg(not(desktop))]
+        {
+            false
+        }
+    };
     map.insert("autostart".into(), if auto { "1" } else { "0" }.into());
     Ok(map)
 }
@@ -364,12 +378,15 @@ pub fn set_settings(
                 })?;
             }
             "autostart" => {
-                use tauri_plugin_autostart::ManagerExt;
-                let auto = app.autolaunch();
-                if sval == "1" {
-                    auto.enable().map_err(|e| e.to_string())?;
-                } else {
-                    auto.disable().map_err(|e| e.to_string())?;
+                #[cfg(desktop)]
+                {
+                    use tauri_plugin_autostart::ManagerExt;
+                    let auto = app.autolaunch();
+                    if sval == "1" {
+                        auto.enable().map_err(|e| e.to_string())?;
+                    } else {
+                        auto.disable().map_err(|e| e.to_string())?;
+                    }
                 }
             }
             "retentionDays" | "maxItems" => {
@@ -1295,46 +1312,62 @@ pub struct UpdateInfo {
 /// Returns Ok(None) when the app is already up to date.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater
-        .check()
-        .await
-        .map_err(|e| format!("UPDATE_CHECK_FAILED: {e}"))?;
-    Ok(update.map(|u| UpdateInfo {
-        version: u.version.clone(),
-        current_version: u.current_version.clone(),
-        notes: u.body.clone(),
-        pub_date: u.date.map(|d| d.to_string()),
-    }))
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_updater::UpdaterExt;
+        let updater = app.updater().map_err(|e| e.to_string())?;
+        let update = updater
+            .check()
+            .await
+            .map_err(|e| format!("UPDATE_CHECK_FAILED: {e}"))?;
+        Ok(update.map(|u| UpdateInfo {
+            version: u.version.clone(),
+            current_version: u.current_version.clone(),
+            notes: u.body.clone(),
+            pub_date: u.date.map(|d| d.to_string()),
+        }))
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = app;
+        Ok(None)
+    }
 }
 
 /// Download + install the pending update and relaunch the app.
 #[tauri::command]
 pub async fn update_install(app: AppHandle) -> Result<bool, String> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater
-        .check()
-        .await
-        .map_err(|e| format!("UPDATE_CHECK_FAILED: {e}"))?
-        .ok_or_else(|| "UPDATE_NOT_AVAILABLE".to_string())?;
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_updater::UpdaterExt;
+        let updater = app.updater().map_err(|e| e.to_string())?;
+        let update = updater
+            .check()
+            .await
+            .map_err(|e| format!("UPDATE_CHECK_FAILED: {e}"))?
+            .ok_or_else(|| "UPDATE_NOT_AVAILABLE".to_string())?;
 
-    let mut downloaded: u64 = 0;
-    update
-        .download_and_install(
-            |chunk, total| {
-                downloaded += chunk as u64;
-                let _ = total; // progress reporting hook (future: emit to UI)
-                let _ = downloaded;
-            },
-            || {},
-        )
-        .await
-        .map_err(|e| format!("UPDATE_INSTALL_FAILED: {e}"))?;
+        let mut downloaded: u64 = 0;
+        update
+            .download_and_install(
+                |chunk, total| {
+                    downloaded += chunk as u64;
+                    let _ = total; // progress reporting hook (future: emit to UI)
+                    let _ = downloaded;
+                },
+                || {},
+            )
+            .await
+            .map_err(|e| format!("UPDATE_INSTALL_FAILED: {e}"))?;
 
-    // Relaunch into the new version (never returns on success).
-    app.restart();
-    #[allow(unreachable_code)]
-    Ok(true)
+        // Relaunch into the new version (never returns on success).
+        app.restart();
+        #[allow(unreachable_code)]
+        Ok(true)
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = app;
+        Err("UPDATER_NOT_SUPPORTED_ON_MOBILE".into())
+    }
 }

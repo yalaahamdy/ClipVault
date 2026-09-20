@@ -17,6 +17,8 @@ interface Props {
   onClearHistory: () => void;
   onNotify?: (msg: string, err?: boolean) => void;
   onSnip?: () => void;
+  floatingBarEnabled?: boolean;
+  onToggleFloatingBar?: () => void;
 }
 
 export function HomeView({
@@ -31,6 +33,8 @@ export function HomeView({
   onClearHistory,
   onNotify,
   onSnip,
+  floatingBarEnabled,
+  onToggleFloatingBar,
 }: Props) {
   const t = useT();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -230,6 +234,41 @@ export function HomeView({
             </div>
             <div className="card-arrow">
               <Icon name="chevronRight" size={16} />
+            </div>
+          </div>
+        )}
+
+        {/* Card: Floating Quick Access Bar */}
+        {onToggleFloatingBar && (
+          <div
+            className={`launchpad-card ${floatingBarEnabled ? "floating-active" : ""}`}
+            onClick={onToggleFloatingBar}
+            role="button"
+            tabIndex={0}
+            style={{
+              borderColor: floatingBarEnabled ? "rgba(56, 189, 248, 0.5)" : "rgba(255, 255, 255, 0.08)",
+              background: floatingBarEnabled
+                ? "linear-gradient(145deg, rgba(14, 165, 233, 0.14), rgba(15, 23, 42, 0.75))"
+                : undefined,
+            }}
+          >
+            <div className="card-accent-bar" style={{ background: floatingBarEnabled ? "#38bdf8" : undefined }} />
+            <div className="card-icon-wrap" style={{ color: "#38bdf8", background: "rgba(56, 189, 248, 0.15)" }}>
+              <Icon name="sparkles" size={20} />
+            </div>
+            <div className="card-info">
+              <div className="card-heading-row">
+                <h3 className="card-title">شريط الوصول السريع والقائمة الدائرية</h3>
+                <span className="card-shortcut-chip" style={{ background: floatingBarEnabled ? "#0284c7" : undefined }}>
+                  {floatingBarEnabled ? "مفعّل ✓" : "معطّل"}
+                </span>
+              </div>
+              <p className="card-desc">
+                زر عائم تفاعلي يبقى على الشاشة لفتح القائمة الدائرية السريعة باللمس
+              </p>
+            </div>
+            <div className="card-arrow">
+              <Icon name={floatingBarEnabled ? "check" : "chevronRight"} size={16} />
             </div>
           </div>
         )}

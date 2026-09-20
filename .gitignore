@@ -14,6 +14,10 @@ Thumbs.db
 *.csv
 *.exe
 !OneOcrProfessional/*.exe
+*.apk
+*.aab
+*.keystore
+*.jks
 OneOcrProfessional/*.zip
 OneOcrProfessional/*_log.txt
 OneOcrProfessional/*test*.json

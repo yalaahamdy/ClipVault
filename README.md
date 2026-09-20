@@ -7,7 +7,7 @@
   ### مدير الحافظة وخزينة كلمات المرور الذكية مع محرك OneOCR لاستخراج النصوص لنظام Windows
   **The Ultra-Fast, Private & Beautiful Local-First Clipboard Manager & Password Vault with OneOCR Engine**
 
-  [![Release](https://img.shields.io/badge/Release-v1.6.0-38bdf8?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/yalaahamdy/ClipVault/releases)
+  [![Release](https://img.shields.io/badge/Release-v1.7.0-38bdf8?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/yalaahamdy/ClipVault/releases)
   [![License: MIT](https://img.shields.io/badge/License-MIT-4ade80?style=for-the-badge)](LICENSE)
   [![Rust](https://img.shields.io/badge/Rust-2021_Edition-f97316?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
   [![Tauri](https://img.shields.io/badge/Tauri-v2.0-24c8db?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
@@ -42,6 +42,15 @@
 > **محلي 100% (Zero-Knowledge & Local-First):** لا يتصل التطبيق بأي خوادم خارجية ولا يرسل أي بيانات عبر الإنترنت. جميع نصوصك وصورك وكلمات مرورك مخزنة ومشفرة محلياً على جهازك فقط.
 
 ---
+
+## 🆕 ما الجديد في 1.7 (What's New in v1.7.0)
+
+| الميزة | الوصف |
+| :--- | :--- |
+| 📱 **دعم Android الرسمي وحزمة موقّعة (Universal APK)** | حزمة أندرويد رسمية موقّعة بمعيار v2 Scheme تعمل على كافة الهواتف، مع إدارة متكاملة لأذونات النظام وإشعارات الخلفية لأندرويد 13 فما فوق. |
+| 🔘 **شريط الوصول السريع العائم والقائمة الدائرية (Floating Radial Menu)** | بديل احترافي لاختصارات لوحة المفاتيح على الهواتف: زر عائم زجاجي قابل للسحب بحرية مع مغنطة للحواف، وقائمة دائرية 360° تتيح الوصول للحافظة والبحث والخزينة والمساعد والإعدادات مع ردود فعل لمسية (Haptic Feedback). |
+| ➕ **إضافة سريعة بنقرة واحدة (Quick Add)** | إمكانية كتابة أو لصق أي نص وحفظه في سجل الحافظة فوراً من القائمة الدائرية أو الشاشة الرئيسية. |
+| 🛡️ **استقرار محرك استخراج النصوص (OneOCR Fixes)** | معالجة جذرية لتعطل لقطات الشاشة وضمان سرعة استخراج النصوص العربية والإنجليزية في جزء من الثانية. |
 
 ## 🆕 ما الجديد في 1.6 (What's New in v1.6)
 
@@ -184,16 +193,12 @@
 | الاختصار | الإجراء |
 | :--- | :--- |
 | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> | فتح أو إخفاء الحافظة من أي مكان في النظام |
-| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> | **أداة قص الشاشة السريعة واستخراج النصوص (Region Snip & OneOCR Tool)** |
 | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd> | **تصحيح لغة النص المحدد فوراً في أي برنامج على مستوى Windows (Global Fixer)** |
-| <kbd>Ctrl</kbd> + <kbd>L</kbd> | **تبديل لغة الواجهة فورياً بين العربية والإنجليزية (عربي ⇄ English)** |
 | <kbd>Ctrl</kbd> + <kbd>1</kbd> | الانتقال إلى الشاشة الرئيسية (Home) |
 | <kbd>Ctrl</kbd> + <kbd>2</kbd> | الانتقال إلى سجل الحافظة (Clipboard) |
 | <kbd>Ctrl</kbd> + <kbd>3</kbd> | الانتقال إلى خزينة كلمات المرور (Password Vault) |
 | <kbd>Ctrl</kbd> + <kbd>4</kbd> | الانتقال إلى جناح الكتابة الذكي والتدقيق (Smart Typing) |
 | <kbd>Ctrl</kbd> + <kbd>5</kbd> | الانتقال إلى شاشة الإعدادات |
-| <kbd>Enter</kbd> (في وضع القص) | نسخ فوري للقطة الشاشة واستخراج النصوص بالحافظة |
-| <kbd>A</kbd> (في وضع القص) | فتح محرر الرسم والتعليق الهندسي على لقطة الشاشة (Annotate) |
 | <kbd>Alt</kbd> + <kbd>1…3</kbd> | التبديل بين أدوات الكتابة (1: عكس اللغة، 2: المدقق، 3: الصوت) |
 | <kbd>Alt</kbd> + <kbd>S</kbd> | تبديل اتجاه لغة التحويل يدوياً (عربي ↔ إنجليزي) |
 | <kbd>Ctrl</kbd> + <kbd>Enter</kbd> | نسخ النتيجة المعكوسة / تطبيق تصحيح الأخطاء بالكامل |
@@ -205,7 +210,7 @@
 | <kbd>Delete</kbd> | حذف العنصر من السجل |
 | <kbd>Ctrl</kbd> + <kbd>T</kbd> | تبديل مظهر الواجهة (داكن / فاتح) |
 | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>N</kbd> | فتح لوحة إدارة الوسوم والمجموعات |
-| <kbd>Esc</kbd> | إغلاق النوافذ المنبثقة أو إلغاء لقطة الشاشة أو إخفاء الحافظة |
+| <kbd>Esc</kbd> | إغلاق النوافذ المنبثقة أو إخفاء الحافظة |
 
 ---
 
@@ -215,7 +220,8 @@
 
 | الملف | النوع | الوصف | رابط التحميل |
 | :--- | :--- | :--- | :--- |
-| **`ClipVault_1.6.0_x64-setup.exe`** | مثبت كامل (Full Installer) | الإصدار 1.6.0 متضمناً النسخ الاحتياطي المشفر، محرر لقطات الشاشة، التحديث التلقائي، ومحرك OneOCR المدمج محلياً | [**تحميل مباشر**](https://github.com/yalaahamdy/ClipVault/releases/download/v1.6.0/ClipVault_1.6.0_x64-setup.exe) |
+| **`ClipVault_1.7.0_x64-setup.exe`** | مثبت كامل لنظام Windows | الإصدار 1.7.0 متضمناً النسخ الاحتياطي المشفر، أداة قص الشاشة السريعة، محرك OneOCR، وخزينة كلمات المرور | [**تحميل مباشر**](https://github.com/yalaahamdy/ClipVault/releases/download/v1.7.0/ClipVault_1.7.0_x64-setup.exe) |
+| **`ClipVault_1.7.0.apk`** | تطبيق Android (Universal APK) | حزمة الأندرويد الرسمية الموقعة فائقة السرعة والخفيفة للهواتف الذكية مع شريط الوصول السريع العائم والقائمة الدائرية | [**تحميل مباشر**](https://github.com/yalaahamdy/ClipVault/releases/download/v1.7.0/ClipVault_1.7.0.apk) |
 
 > **ملاحظة حول Windows SmartScreen:** نظراً لأن الحزمة مفتوحة المصدر ومبنية محلياً دون شهادة توقيع مدفوعة، قد يظهر تحذير أمان خفيف عند أول تشغيل؛ اضغط على *"More info"* ثم *"Run anyway"*. الكود المصدري متاح بالكامل للمراجعة.
 
@@ -231,15 +237,18 @@ cd ClipVault
 # 2. تثبيت مكتبات الواجهة
 npm install
 
-# 3. تشغيل وضع التطوير الحي
-npm run tauri dev
-
-# 4. تجميع مثبت الإنتاج النهائي (NSIS)
+# 3. تجميع مثبت Windows النهائي (NSIS)
 npm run tauri build
+
+# 4. تجميع حزمة Android APK للهواتف
+npx tauri android build --apk
 ```
 
-ينتج ملف التثبيت المجمع في المسار:
-`src-tauri/target/release/bundle/nsis/ClipVault_1.6.0_x64-setup.exe`
+ينتج ملف التثبيت لنظام Windows في المسار:
+`src-tauri/target/release/bundle/nsis/ClipVault_1.7.0_x64-setup.exe`
+
+وينتج ملف تطبيق Android (APK) في المسار:
+`src-tauri/gen/android/app/build/outputs/apk/universal/release/` أو `arm64-v8a/release/`
 
 ---
 
